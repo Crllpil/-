@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教师首页 - 学生选课管理系统</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-custom">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#"><i class="bi bi-mortarboard-fill"></i>学生选课管理系统</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="nav-overview" href="dashboard.html">
+                            <i class="bi bi-speedometer2 me-1"></i>课程概览
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-roster" href="roster.html">
+                            <i class="bi bi-people-fill me-1"></i>学生名单
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-grades" href="grade_entry.html">
+                            <i class="bi bi-pencil-square me-1"></i>成绩录入
+                        </a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center gap-3">
+                    <span id="userDisplay" class="user-badge"></span>
+                    <button class="btn-logout" id="btnLogout">
+                        <i class="bi bi-box-arrow-right me-1"></i>退出
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="page-header">
+            <h4><i class="bi bi-speedometer2 me-2"></i>我的课程概览</h4>
+            <p>查看本学期授课课程信息及工作量统计</p>
+        </div>
+
+        <!-- 工作量统计 -->
+        <div class="row g-3 mb-4" id="workloadStats"></div>
+
+        <!-- 课程卡片 -->
+        <div class="section-card">
+            <div class="section-title"><i class="bi bi-book me-2"></i>授课课程</div>
+            <div id="courseList" class="row">
+                <div class="col-12 text-center py-4 text-muted">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script>
+        requireRole('teacher');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setActiveNav('nav-overview');
+            loadDashboard();
+        });
+
+        async function loadDashboard() {
+            showLoading();
+            try {
+                const [coursesData, workloadData] = await Promise.all([
+                    TeacherAPI.getMyCourses(),
+                    TeacherAPI.getWorkload().catch(() => null),
+                ]);
+                const courses = coursesData.data || coursesData || [];
+                const workload = workloadData || {};
+
+                renderWorkload(workload);
+                renderCourses(courses);
+            } catch (err) {
+                showToast('加载失败: ' + err.message, 'danger');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function renderWorkload(w) {
+            document.getElementById('workloadStats').innerHTML = `
+                <div class="col-xl-3 col-md-6">
+                    <div class="card stat-card">
+                        <div class="card-body d-flex align-items-center gap-3">
+                            <div class="stat-icon" style="background:var(--sec);"><i class="bi bi-book"></i></div>
+                            <div><div class="stat-value">${w.course_count || 0}</div><div class="stat-label">授课门数</div></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="card stat-card">
+                        <div class="card-body d-flex align-items-center gap-3">
+                            <div class="stat-icon" style="background:var(--acc);"><i class="bi bi-people"></i></div>
+                            <div><div class="stat-value">${w.total_students || 0}</div><div class="stat-label">授课总人数</div></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="card stat-card">
+                        <div class="card-body d-flex align-items-center gap-3">
+                            <div class="stat-icon" style="background:#27ae60;"><i class="bi bi-graph-up"></i></div>
+                            <div><div class="stat-value">${w.pass_rate_percent || '--'}${w.pass_rate_percent ? '%' : ''}</div><div class="stat-label">及格率</div></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="card stat-card">
+                        <div class="card-body d-flex align-items-center gap-3">
+                            <div class="stat-icon" style="background:var(--warn);"><i class="bi bi-flag"></i></div>
+                            <div><div class="stat-value" style="font-size:1.2rem;">${w.workload_status || '--'}</div><div class="stat-label">工作量评级</div></div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function renderCourses(courses) {
+            const container = document.getElementById('courseList');
+            if (courses.length === 0) {
+                container.innerHTML = `<div class="col-12 text-center text-muted py-4">
+                    <i class="bi bi-inbox" style="font-size:2rem;"></i>
+                    <p class="mt-2">暂无授课课程</p>
+                </div>`;
+                return;
+            }
+
+            container.innerHTML = courses.map(c => {
+                const enrolled = c.enrolled_count || c.total_students || 0;
+                const capacity = c.capacity || '--';
+                return `
+                <div class="col-xl-4 col-lg-6">
+                    <div class="card course-card">
+                        <div class="card-body">
+                            <h6 class="card-title fw-bold mb-2" style="color:var(--pri);">${c.course_name}</h6>
+                            <p class="mb-1" style="font-size:.82rem;">
+                                <span class="text-muted">课程号:</span> <code>${c.course_id}</code>
+                                <span class="ms-3 text-muted">学分:</span> <strong>${c.credit}</strong>
+                            </p>
+                            <p class="mb-1" style="font-size:.82rem;">
+                                <span class="text-muted">时间:</span> ${c.schedule_time || '未安排'}
+                            </p>
+                            <p class="mb-2" style="font-size:.82rem;">
+                                <span class="text-muted">地点:</span> ${c.location || '未安排'}
+                            </p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span style="font-size:.85rem;">
+                                    <i class="bi bi-people me-1 text-muted"></i>选课人数: <strong>${enrolled}</strong> / ${capacity}
+                                </span>
+                                <div>
+                                    <a href="roster.html?course_id=${c.course_id}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-people me-1"></i>名单
+                                    </a>
+                                    <a href="grade_entry.html?course_id=${c.course_id}" class="btn btn-sm btn-outline-success ms-1">
+                                        <i class="bi bi-pencil me-1"></i>成绩
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+    </script>
+</body>
+</html>

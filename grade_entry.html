@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>成绩录入 - 学生选课管理系统</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-custom">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#"><i class="bi bi-mortarboard-fill"></i>学生选课管理系统</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-overview" href="dashboard.html">
+                            <i class="bi bi-speedometer2 me-1"></i>课程概览
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-roster" href="roster.html">
+                            <i class="bi bi-people-fill me-1"></i>学生名单
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" id="nav-grades" href="grade_entry.html">
+                            <i class="bi bi-pencil-square me-1"></i>成绩录入
+                        </a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center gap-3">
+                    <span id="userDisplay" class="user-badge"></span>
+                    <button class="btn-logout" id="btnLogout">
+                        <i class="bi bi-box-arrow-right me-1"></i>退出
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="page-header">
+            <h4><i class="bi bi-pencil-square me-2"></i>成绩录入</h4>
+            <p>为选课学生录入或修改成绩（支持0-100分），修改记录将自动保存至审计日志</p>
+        </div>
+
+        <!-- 课程选择 -->
+        <div class="filter-bar">
+            <label class="form-label mb-0 me-2"><strong>选择课程：</strong></label>
+            <select class="form-select" id="courseSelect" onchange="loadStudents()">
+                <option value="">-- 请选择课程 --</option>
+            </select>
+            <button class="btn btn-primary-custom btn-sm ms-auto" onclick="batchSave()" id="btnBatchSave" style="display:none;">
+                <i class="bi bi-save me-1"></i>批量保存
+            </button>
+        </div>
+
+        <!-- 成绩录入表格 -->
+        <div class="section-card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="section-title mb-0"><i class="bi bi-list-check me-2"></i>成绩列表</div>
+                <div>
+                    <span class="text-muted" style="font-size:.82rem;">
+                        已录入 <strong id="gradedCount">0</strong> / <span id="totalCount">0</span>
+                    </span>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-custom">
+                    <thead>
+                        <tr>
+                            <th>学号</th><th>姓名</th><th>性别</th><th>学院</th>
+                            <th>选课时间</th><th>当前成绩</th><th>新成绩</th><th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gradeTableBody">
+                        <tr><td colspan="8" class="text-center text-muted py-4">
+                            请先选择课程
+                        </td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 成绩修改确认模态框 -->
+    <div class="modal fade" id="gradeConfirmModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>确认修改</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="gradeConfirmBody"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-warning-custom btn-sm" id="confirmGradeBtn">确认</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script>
+        let pendingGradeData = null;
+        requireRole('teacher');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setActiveNav('nav-grades');
+            loadCourses();
+        });
+
+        async function loadCourses() {
+            try {
+                const data = await TeacherAPI.getMyCourses();
+                const courses = data.data || data || [];
+                const select = document.getElementById('courseSelect');
+                select.innerHTML = '<option value="">-- 请选择课程 --</option>' +
+                    courses.map(c => `<option value="${c.course_id}">${c.course_name} (${c.course_id})</option>`).join('');
+
+                // 从URL获取预选课程
+                const params = new URLSearchParams(window.location.search);
+                const courseId = params.get('course_id');
+                if (courseId) {
+                    select.value = courseId;
+                    loadStudents();
+                }
+            } catch (err) {
+                showToast('加载课程列表失败', 'danger');
+            }
+        }
+
+        async function loadStudents() {
+            const courseId = document.getElementById('courseSelect').value;
+            if (!courseId) {
+                document.getElementById('gradeTableBody').innerHTML =
+                    '<tr><td colspan="8" class="text-center text-muted py-4">请先选择课程</td></tr>';
+                document.getElementById('btnBatchSave').style.display = 'none';
+                return;
+            }
+
+            showLoading();
+            try {
+                const data = await TeacherAPI.getStudentRoster(courseId);
+                const students = data.data || data || [];
+                document.getElementById('totalCount').textContent = students.length;
+                document.getElementById('btnBatchSave').style.display = students.length > 0 ? 'inline-block' : 'none';
+                renderTable(students);
+                updateGradedCount();
+            } catch (err) {
+                showToast('加载学生列表失败: ' + err.message, 'danger');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function renderTable(students) {
+            const tbody = document.getElementById('gradeTableBody');
+            if (students.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">
+                    <i class="bi bi-inbox" style="font-size:1.5rem;"></i>
+                    <p class="mt-2 mb-0">该课程暂无学生选课</p>
+                </td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = students.map(s => {
+                const currentGrade = (s.grade !== null && s.grade !== undefined && s.grade !== '') ? s.grade : '';
+                return `
+                <tr id="row-${s.enroll_id}">
+                    <td><code>${s.student_id}</code></td>
+                    <td>${s.student_name}</td>
+                    <td>${s.gender || '--'}</td>
+                    <td>${s.student_college || '--'}</td>
+                    <td><small>${formatDate(s.enroll_time)}</small></td>
+                    <td id="current-${s.enroll_id}">
+                        ${currentGrade !== '' ? `<strong>${currentGrade}</strong> 分` : '<span class="text-muted">未录入</span>'}
+                    </td>
+                    <td>
+                        <input type="number" class="grade-input" id="grade-${s.enroll_id}"
+                               min="0" max="100" step="0.1" value="${currentGrade}"
+                               placeholder="0-100"
+                               onchange="markChanged(${s.enroll_id})">
+                    </td>
+                    <td id="status-${s.enroll_id}">
+                        ${getGradeBadge(currentGrade)}
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function markChanged(enrollId) {
+            const input = document.getElementById(`grade-${enrollId}`);
+            const row = document.getElementById(`row-${enrollId}`);
+            const currentCell = document.getElementById(`current-${enrollId}`);
+            const currentText = currentCell.textContent.trim();
+            const currentGrade = currentText.replace('分', '').trim();
+
+            const newGrade = input.value.trim();
+
+            if (newGrade === '' || newGrade === currentGrade || (currentGrade === '未录入' && newGrade === '')) {
+                input.classList.remove('border-warning', 'border-success');
+                input.style.borderColor = '';
+                return;
+            }
+            if (parseFloat(newGrade) < 0 || parseFloat(newGrade) > 100) {
+                showToast('成绩应在0-100之间', 'warning');
+                input.value = currentGrade === '未录入' ? '' : currentGrade;
+                return;
+            }
+            input.classList.add('border-warning');
+            input.style.borderColor = '#E67E22';
+            row.style.background = '#FFF9F0';
+        }
+
+        function updateGradedCount() {
+            const count = document.querySelectorAll('.grade-input').length;
+            let graded = 0;
+            document.querySelectorAll('.grade-input').forEach(inp => {
+                if (inp.value.trim() !== '') graded++;
+            });
+            document.getElementById('gradedCount').textContent = graded;
+        }
+
+        async function batchSave() {
+            const inputs = document.querySelectorAll('.grade-input.border-warning');
+            if (inputs.length === 0) {
+                showToast('没有需要保存的更改', 'info');
+                return;
+            }
+
+            const changes = [];
+            inputs.forEach(inp => {
+                const enrollId = parseInt(inp.id.replace('grade-', ''));
+                const newGrade = parseFloat(inp.value.trim());
+                if (!isNaN(newGrade) && newGrade >= 0 && newGrade <= 100) {
+                    changes.push({ enrollId, newGrade });
+                }
+            });
+
+            if (changes.length === 0) {
+                showToast('没有有效的成绩修改', 'warning');
+                return;
+            }
+
+            // 显示确认
+            document.getElementById('gradeConfirmBody').innerHTML = `
+                <p>确认修改 <strong>${changes.length}</strong> 名学生的成绩？</p>
+                <p class="text-muted" style="font-size:.78rem;">
+                    <i class="bi bi-info-circle me-1"></i>修改记录将写入审计日志
+                </p>`;
+            pendingGradeData = changes;
+
+            const modal = new bootstrap.Modal(document.getElementById('gradeConfirmModal'));
+            document.getElementById('confirmGradeBtn').onclick = async () => {
+                modal.hide();
+                await doBatchSave(changes);
+            };
+            modal.show();
+        }
+
+        async function doBatchSave(changes) {
+            showLoading();
+            let successCount = 0;
+            let failCount = 0;
+
+            try {
+                for (const { enrollId, newGrade } of changes) {
+                    try {
+                        await TeacherAPI.updateGrade(enrollId, newGrade);
+                        // 更新UI
+                        const inp = document.getElementById(`grade-${enrollId}`);
+                        inp.classList.remove('border-warning');
+                        inp.style.borderColor = '';
+                        document.getElementById(`row-${enrollId}`).style.background = '';
+                        document.getElementById(`current-${enrollId}`).innerHTML = `<strong>${newGrade}</strong> 分`;
+                        document.getElementById(`status-${enrollId}`).innerHTML = getGradeBadge(newGrade);
+                        successCount++;
+                    } catch (err) {
+                        failCount++;
+                        console.error(`录入成绩失败 (enroll_id=${enrollId}):`, err);
+                    }
+                }
+                updateGradedCount();
+                if (failCount === 0) {
+                    showToast(`成绩已全部保存，共更新 ${successCount} 条记录`, 'success');
+                } else {
+                    showToast(`保存完成：成功 ${successCount} 条，失败 ${failCount} 条`, 'warning');
+                }
+            } catch (err) {
+                showToast('批量保存出错: ' + err.message, 'danger');
+            } finally {
+                hideLoading();
+                pendingGradeData = null;
+            }
+        }
+    </script>
+</body>
+</html>

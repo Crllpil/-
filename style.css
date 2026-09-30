@@ -1,0 +1,367 @@
+/* ============================================
+   学生选课管理系统 - 全局样式表
+   基于 Bootstrap 5 自定义主题
+   ============================================ */
+
+:root {
+    --pri: #2C3E50;
+    --sec: #3495DB;
+    --acc: #1ABC9C;
+    --warn: #E67E22;
+    --danger: #E74C3C;
+    --dark: #2C2C2C;
+    --lit: #7F8C8D;
+    --bgl: #F5F7FA;
+    --brd: #E0E4E8;
+}
+
+/* ---- Base ---- */
+body {
+    font-family: 'Microsoft YaHei', 'PingFang SC', -apple-system, sans-serif;
+    background: var(--bgl);
+    color: var(--dark);
+    min-height: 100vh;
+}
+
+/* ---- Navbar ---- */
+.navbar-custom {
+    background: var(--pri);
+    box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+.navbar-custom .navbar-brand {
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.25rem;
+    letter-spacing: .5px;
+}
+.navbar-custom .navbar-brand i { color: var(--acc); margin-right: 8px; }
+.navbar-custom .nav-link {
+    color: rgba(255,255,255,.85);
+    font-size: .92rem;
+    padding: .5rem 1rem;
+    border-radius: 6px;
+    transition: all .2s;
+}
+.navbar-custom .nav-link:hover,
+.navbar-custom .nav-link.active {
+    color: #fff;
+    background: rgba(255,255,255,.12);
+}
+.navbar-custom .user-badge {
+    color: var(--acc);
+    font-weight: 600;
+}
+.navbar-custom .btn-logout {
+    color: rgba(255,255,255,.65);
+    border: 1px solid rgba(255,255,255,.25);
+    border-radius: 6px;
+    padding: .35rem .85rem;
+    font-size: .85rem;
+    transition: all .2s;
+}
+.navbar-custom .btn-logout:hover {
+    color: #fff;
+    border-color: var(--danger);
+    background: var(--danger);
+}
+
+/* ---- Login Page ---- */
+.login-page {
+    background: linear-gradient(135deg, var(--pri) 0%, #1a252f 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.login-card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    padding: 2.5rem;
+    width: 100%;
+    max-width: 440px;
+}
+.login-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+.login-header h3 {
+    color: var(--pri);
+    font-weight: 700;
+    margin-bottom: .3rem;
+}
+.login-header p {
+    color: var(--lit);
+    font-size: .88rem;
+}
+.login-card .form-label {
+    font-weight: 600;
+    color: var(--dark);
+    font-size: .88rem;
+}
+.login-card .form-control {
+    border-radius: 8px;
+    padding: .65rem .9rem;
+    border: 1.5px solid var(--brd);
+    transition: all .2s;
+}
+.login-card .form-control:focus {
+    border-color: var(--sec);
+    box-shadow: 0 0 0 .2rem rgba(52,149,219,.2);
+}
+.role-selector {
+    display: flex;
+    gap: .6rem;
+    margin-bottom: 1.2rem;
+}
+.role-option {
+    flex: 1;
+    text-align: center;
+    padding: .7rem .4rem;
+    border: 2px solid var(--brd);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all .2s;
+    background: #fff;
+}
+.role-option:hover {
+    border-color: var(--sec);
+    background: #f0f7fd;
+}
+.role-option.selected {
+    border-color: var(--sec);
+    background: #e8f4fd;
+    box-shadow: 0 0 0 3px rgba(52,149,219,.15);
+}
+.role-option i {
+    display: block;
+    font-size: 1.5rem;
+    margin-bottom: .25rem;
+    color: var(--lit);
+}
+.role-option.selected i { color: var(--sec); }
+.role-option .role-label {
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--dark);
+}
+.login-card .btn-login {
+    width: 100%;
+    padding: .7rem;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: 1px;
+    background: var(--sec);
+    border: none;
+    transition: all .2s;
+}
+.login-card .btn-login:hover {
+    background: #2980b9;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(52,149,219,.4);
+}
+
+/* ---- Cards ---- */
+.stat-card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    transition: all .25s;
+    cursor: pointer;
+}
+.stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,.1);
+}
+.stat-card .card-body {
+    padding: 1.3rem 1.5rem;
+}
+.stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    color: #fff;
+}
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+.stat-label {
+    font-size: .82rem;
+    color: var(--lit);
+}
+
+.course-card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    transition: all .25s;
+    margin-bottom: 1.2rem;
+}
+.course-card:hover {
+    box-shadow: 0 6px 20px rgba(0,0,0,.1);
+}
+.course-card .badge-status {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: .75rem;
+    padding: .3rem .7rem;
+    border-radius: 20px;
+}
+
+/* ---- Table ---- */
+.table-custom {
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.table-custom thead th {
+    background: var(--pri);
+    color: #fff;
+    font-weight: 600;
+    font-size: .85rem;
+    padding: .75rem 1rem;
+    border: none;
+    white-space: nowrap;
+}
+.table-custom tbody td {
+    padding: .65rem 1rem;
+    font-size: .9rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--bgl);
+}
+.table-custom tbody tr:hover {
+    background: #f8fafc;
+}
+
+/* ---- Badges ---- */
+.badge-full { background: var(--danger); color: #fff; }
+.badge-tight { background: var(--warn); color: #fff; }
+.badge-available { background: var(--acc); color: #fff; }
+.badge-pass { background: #27ae60; color: #fff; }
+.badge-fail { background: var(--danger); color: #fff; }
+.badge-nograde { background: var(--lit); color: #fff; }
+
+/* ---- Sections ---- */
+.page-header {
+    margin-bottom: 1.5rem;
+}
+.page-header h4 {
+    color: var(--pri);
+    font-weight: 700;
+    margin-bottom: .2rem;
+}
+.page-header p {
+    color: var(--lit);
+    font-size: .9rem;
+    margin: 0;
+}
+.section-card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.section-title {
+    font-weight: 700;
+    color: var(--pri);
+    margin-bottom: 1rem;
+    padding-bottom: .6rem;
+    border-bottom: 2px solid var(--bgl);
+    font-size: 1.05rem;
+}
+
+/* ---- Filters ---- */
+.filter-bar {
+    background: #fff;
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    display: flex;
+    gap: .8rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.filter-bar .form-control,
+.filter-bar .form-select {
+    border-radius: 8px;
+    font-size: .88rem;
+    max-width: 200px;
+}
+
+/* ---- Modal ---- */
+.modal-content {
+    border-radius: 14px;
+    border: none;
+    box-shadow: 0 20px 60px rgba(0,0,0,.2);
+}
+.modal-header {
+    background: var(--pri);
+    color: #fff;
+    border-radius: 14px 14px 0 0;
+    padding: 1rem 1.5rem;
+}
+.modal-header .btn-close { filter: brightness(0) invert(1); }
+.modal-title { font-weight: 700; font-size: 1.1rem; }
+.modal-footer { border-top: 1px solid var(--bgl); padding: 1rem 1.5rem; }
+
+/* ---- Buttons ---- */
+.btn-primary-custom { background: var(--sec); border: none; color: #fff; border-radius: 8px; }
+.btn-primary-custom:hover { background: #2980b9; color: #fff; }
+.btn-success-custom { background: var(--acc); border: none; color: #fff; border-radius: 8px; }
+.btn-success-custom:hover { background: #16a085; color: #fff; }
+.btn-danger-custom { background: var(--danger); border: none; color: #fff; border-radius: 8px; }
+.btn-warning-custom { background: var(--warn); border: none; color: #fff; border-radius: 8px; }
+
+/* ---- Toast ---- */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+}
+
+/* ---- Loader ---- */
+.spinner-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255,255,255,.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9998;
+}
+
+/* ---- Grade input ---- */
+.grade-input {
+    width: 70px;
+    text-align: center;
+    border-radius: 6px;
+    border: 1.5px solid var(--brd);
+    padding: .3rem;
+    font-size: .88rem;
+}
+.grade-input:focus {
+    border-color: var(--sec);
+    outline: none;
+    box-shadow: 0 0 0 .15rem rgba(52,149,219,.2);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+    .login-card { margin: 1rem; padding: 1.5rem; }
+    .stat-card .stat-value { font-size: 1.4rem; }
+    .filter-bar { flex-direction: column; }
+    .filter-bar .form-control,
+    .filter-bar .form-select { max-width: 100%; }
+}

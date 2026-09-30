@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生选课管理系统 - 登录</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="login-page">
+    <div class="login-card">
+        <div class="login-header">
+            <i class="bi bi-mortarboard-fill" style="font-size:2.5rem;color:var(--sec);"></i>
+            <h3>学生选课管理系统</h3>
+            <p>Student Course Selection System</p>
+        </div>
+
+        <!-- 角色选择 -->
+        <div class="role-selector" id="roleSelector">
+            <div class="role-option selected" data-role="student" onclick="selectRole('student', this)">
+                <i class="bi bi-person-fill"></i>
+                <span class="role-label">学 生</span>
+            </div>
+            <div class="role-option" data-role="teacher" onclick="selectRole('teacher', this)">
+                <i class="bi bi-person-workspace"></i>
+                <span class="role-label">教 师</span>
+            </div>
+            <div class="role-option" data-role="admin" onclick="selectRole('admin', this)">
+                <i class="bi bi-shield-lock-fill"></i>
+                <span class="role-label">管理员</span>
+            </div>
+        </div>
+
+        <!-- 登录表单 -->
+        <form id="loginForm" onsubmit="return handleLogin(event)">
+            <div class="mb-3">
+                <label class="form-label">
+                    <i class="bi bi-person-badge me-1"></i>
+                    <span id="idLabel">学 号</span>
+                </label>
+                <input type="text" class="form-control" id="uid"
+                       placeholder="请输入学号" required autocomplete="off">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">
+                    <i class="bi bi-lock-fill me-1"></i>密 码
+                </label>
+                <input type="password" class="form-control" id="password"
+                       placeholder="请输入密码" required>
+            </div>
+            <button type="submit" class="btn btn-login text-white mt-2">
+                <i class="bi bi-box-arrow-in-right me-1"></i>登 录
+            </button>
+        </form>
+
+        <p class="text-center mt-3 mb-0" style="font-size:.78rem;color:var(--lit);">
+            默认密码：123456 ｜ 请及时修改密码
+        </p>
+    </div>
+
+    <!-- Toast 容器 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        let selectedRole = 'student';
+
+        function selectRole(role, el) {
+            selectedRole = role;
+            document.querySelectorAll('.role-option').forEach(o => o.classList.remove('selected'));
+            el.classList.add('selected');
+            // 更新输入框标签
+            const labelMap = { student: '学 号', teacher: '工 号', admin: '管理员账号' };
+            const placeholderMap = { student: '请输入学号', teacher: '请输入教师工号', admin: '请输入管理员账号' };
+            document.getElementById('idLabel').innerText = labelMap[role];
+            document.getElementById('uid').placeholder = placeholderMap[role];
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const uid = document.getElementById('uid').value.trim();
+            const password = document.getElementById('password').value.trim();
+
+            if (!uid || !password) {
+                showToast('请输入账号和密码', 'warning');
+                return false;
+            }
+
+            showLoading();
+            try {
+                const result = await loginAPI(uid, password, selectedRole);
+                setSession({
+                    uid: uid,
+                    role: selectedRole,
+                    name: result.name || uid,
+                    token: result.token || '',
+                    college: result.college || '',
+                });
+
+                // 跳转到对应角色主页
+                const dashMap = {
+                    student: 'student/dashboard.html',
+                    teacher: 'teacher/dashboard.html',
+                    admin: 'admin/dashboard.html',
+                };
+                window.location.href = dashMap[selectedRole];
+            } catch (err) {
+                showToast(err.message || '登录失败，请检查账号密码', 'danger');
+            } finally {
+                hideLoading();
+            }
+            return false;
+        }
+    </script>
+</body>
+</html>
