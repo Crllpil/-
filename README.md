@@ -5,22 +5,22 @@
 ## 目录结构
 
 ```
-24050236杨欣豪-24050237余泽凯-24050238钟劲森/
+.
+├── README.md                       # 项目说明（本文件）
+├── requirements.txt                # Python 依赖（Flask / flask-cors / pg8000）
 ├── app.py                          # Flask 后端（全部 REST API）
 ├── scheduler.py                    # Python 遗传算法排课引擎
 ├── 前端相关代码及文件/
 │   └── opengauss-web-project/      # 前端页面、样式、JS、离线演示数据
-├── 数据库SQL代码/
-│   ├── 01_ddl_tables.sql           # 13 张业务表
-│   ├── 02_views.sql                # 课表/工作量/利用率等视图
-│   ├── 03_indexes.sql              # 索引
-│   ├── 04_security.sql             # RBAC 角色与权限
-│   ├── 05_triggers.sql             # 冲突校验、方案启用、审计触发器
-│   ├── 06_procedures.sql           # 启用方案、刷新冲突、人工调整等函数
-│   ├── 07_seed_data.sql            # 演示数据
-│   └── README.md                   # 数据库执行说明
-├── 报告文档/                        # 原有课程设计文档
-└── PowerDesigner文件/               # 原有模型文件
+└── 数据库SQL代码/
+    ├── 01_ddl_tables.sql           # 13 张业务表
+    ├── 02_views.sql                # 课表/工作量/利用率等视图
+    ├── 03_indexes.sql              # 索引
+    ├── 04_security.sql             # RBAC 角色与权限
+    ├── 05_triggers.sql             # 冲突校验、方案启用、审计触发器
+    ├── 06_procedures.sql           # 启用方案、刷新冲突、人工调整等函数
+    ├── 07_seed_data.sql            # 演示数据
+    └── README.md                   # 数据库执行说明
 ```
 
 ## 快速启动
@@ -28,10 +28,11 @@
 ### 1. 初始化 openGauss
 
 ```bash
-gsql -d postgres -U omm -W -c "CREATE DATABASE campus_schedule;"
+# 以 opengauss 用户执行
+gsql -d postgres -U opengauss -W -c "CREATE DATABASE campus_schedule;"
 cd 数据库SQL代码
 for f in 01_ddl_tables.sql 02_views.sql 03_indexes.sql 04_security.sql 05_triggers.sql 06_procedures.sql 07_seed_data.sql; do
-  gsql -d campus_schedule -U omm -W -f "$f"
+  gsql -d campus_schedule -U opengauss -W -f "$f"
 done
 ```
 
@@ -41,9 +42,10 @@ done
 # 安装依赖（如尚未安装）
 pip3 install -r requirements.txt
 
+# WSL 下需以 opengauss 用户运行：app.py 通过 Unix socket 连接数据库
 su -s /bin/bash - opengauss
-cd /tmp
-python3 /mnt/c/Users/13087/Desktop/24050236杨欣豪-24050237余泽凯-24050238钟劲森/app.py
+cd <项目根目录>
+python3 app.py
 ```
 
 浏览器访问 `http://localhost:5000`。
@@ -72,6 +74,6 @@ python3 /mnt/c/Users/13087/Desktop/24050236杨欣豪-24050237余泽凯-24050238�
 
 ## 说明
 
-- 前端在后端不可用时会自动切换到 `js/mock.js` 的离线演示数据，便于单独展示页面。
+- 前端在后端不可用时会自动切换到 `前端相关代码及文件/opengauss-web-project/js/mock.js` 的离线演示数据，便于单独展示页面。
 - 数据库脚本执行顺序、表结构和演示数据说明见 `数据库SQL代码/README.md`。
-- 原项目文件已备份为 `app.py_原始备份`、`数据库SQL代码_原始备份`、`前端相关代码及文件/opengauss-web-project_原始备份`。
+- 仓库不包含本地备份文件（`_原始备份` 目录、演示视频等），以及报告文档和 PowerDesigner 模型文件。
