@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>排课任务 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-list-check me-2"></i>排课任务</h4>
+                <p>创建排课任务、配置算法参数，运行遗传算法自动生成课程表</p>
+            </div>
+            <div class="page-actions">
+                <a href="plans.html" class="btn btn-outline-secondary"><i class="bi bi-layers me-1"></i>方案版本</a>
+                <button class="btn btn-primary-custom" onclick="showCreate()"><i class="bi bi-plus-lg me-1"></i>新建排课任务</button>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3" id="taskStats"></div>
+
+        <div class="section-card p-0">
+            <div class="table-responsive">
+                <table class="table table-custom mb-0">
+                    <thead><tr><th>任务名称</th><th>学期</th><th>算法</th><th>参数</th><th>状态</th><th>创建人</th><th>创建时间</th><th>操作</th></tr></thead>
+                    <tbody id="tbody"><tr><td colspan="8" class="text-center text-muted py-4">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="createModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title"><i class="bi bi-magic me-2"></i>新建排课任务</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-8"><label class="form-label">任务名称 <span class="text-danger">*</span></label>
+                            <input class="form-control" id="taskName" placeholder="如 2026-2027学年第二学期排课"></div>
+                        <div class="col-md-4"><label class="form-label">学期</label>
+                            <select class="form-select" id="semester">
+                                <option>2026-2027-1</option><option>2026-2027-2</option><option>2027-2028-1</option>
+                            </select></div>
+                        <div class="col-md-4"><label class="form-label">算法类型</label>
+                            <select class="form-select" id="algorithm">
+                                <option value="GA">遗传算法（GA）</option>
+                                <option value="SA">模拟退火（SA）</option>
+                                <option value="TS">禁忌搜索（TS）</option>
+                                <option value="CP-SAT">CP-SAT</option>
+                            </select></div>
+                        <div class="col-md-4"><label class="form-label">种群规模</label><input type="number" class="form-control" id="populationSize" min="6" max="60" value="20"></div>
+                        <div class="col-md-4"><label class="form-label">最大迭代代数</label><input type="number" class="form-control" id="generations" min="8" max="300" value="60"></div>
+                    </div>
+                    <hr class="my-4">
+                    <div class="section-title" style="font-size:.98rem;">软约束权重</div>
+                    <div class="row g-3">
+                        <div class="col-md-4"><label class="form-label">教师时间偏好</label><input type="number" class="form-control" id="wPref" min="0" max="1" step="0.05" value="0.30"></div>
+                        <div class="col-md-4"><label class="form-label">课程日分布</label><input type="number" class="form-control" id="wDist" min="0" max="1" step="0.05" value="0.20"></div>
+                        <div class="col-md-4"><label class="form-label">教室利用率</label><input type="number" class="form-control" id="wUtil" min="0" max="1" step="0.05" value="0.15"></div>
+                        <div class="col-md-4"><label class="form-label">班级课表空档</label><input type="number" class="form-control" id="wGap" min="0" max="1" step="0.05" value="0.20"></div>
+                        <div class="col-md-4"><label class="form-label">连堂偏好</label><input type="number" class="form-control" id="wCon" min="0" max="1" step="0.05" value="0.15"></div>
+                        <div class="col-md-4"><label class="form-label">求解时间上限（秒）</label><input type="number" class="form-control" id="timeLimit" min="10" max="1800" value="600"></div>
+                    </div>
+                    <div class="soft-note mt-3"><i class="bi bi-info-circle me-1"></i>演示环境统一由内置遗传算法引擎求解；硬约束（教师/班级/教室冲突、容量、禁止时段）优先满足，软约束按权重优化。</div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button class="btn btn-primary-custom" onclick="createTask()"><i class="bi bi-check-lg me-1"></i>创建任务</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="runModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title"><i class="bi bi-cpu me-2"></i>正在运行自动排课</h5></div>
+                <div class="modal-body">
+                    <div class="d-flex justify-content-between mb-1" style="font-size:.84rem;">
+                        <span id="runStage">准备数据...</span><strong id="runPercent">0%</strong>
+                    </div>
+                    <div class="progress mb-3" style="height:12px;border-radius:8px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" id="runBar" style="width:0%;"></div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-4"><div class="p-2 rounded bg-light text-center"><div class="fw-bold" id="runFitness">--</div><small class="text-muted">最优适应度</small></div></div>
+                        <div class="col-4"><div class="p-2 rounded bg-light text-center"><div class="fw-bold" id="runHard">--</div><small class="text-muted">硬冲突</small></div></div>
+                        <div class="col-4"><div class="p-2 rounded bg-light text-center"><div class="fw-bold" id="runGen">--</div><small class="text-muted">迭代代数</small></div></div>
+                    </div>
+                    <pre class="bg-dark text-light p-3 rounded mb-0" id="runLog" style="max-height:190px;overflow:auto;font-size:.74rem;white-space:pre-wrap;">等待算法启动...</pre>
+                </div>
+                <div class="modal-footer" id="runFooter" style="display:none;">
+                    <a href="plans.html" class="btn btn-outline-secondary"><i class="bi bi-layers me-1"></i>查看方案</a>
+                    <a href="schedule.html" class="btn btn-primary-custom"><i class="bi bi-grid me-1"></i>查看课表</a>
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        renderLayout('scheduler', 'tasks');
+        let tasks = [];
+        let running = false;
+
+        document.addEventListener('DOMContentLoaded', loadTasks);
+
+        async function loadTasks() {
+            showLoading();
+            try {
+                const res = await SchedulerAPI.getTasks();
+                tasks = res.data || res || [];
+                renderTable();
+                renderStats();
+            } catch (err) { showToast('加载失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        function renderStats() {
+            const completed = tasks.filter(t => t.status === 'completed').length;
+            renderStatCards('taskStats', [
+                { label: '排课任务', value: tasks.length, icon: 'bi-list-check', color: 'var(--sec)' },
+                { label: '已完成', value: completed, icon: 'bi-check2-circle', color: '#27ae60' },
+                { label: '待运行', value: tasks.filter(t => t.status === 'pending').length, icon: 'bi-hourglass-split', color: 'var(--warn)' },
+                { label: '默认算法', value: 'GA', icon: 'bi-cpu', color: 'var(--pri)', sub: '遗传算法' },
+            ]);
+        }
+
+        function statusText(s) {
+            return s === 'completed' ? '完成' : s === 'running' ? '运行中' : s === 'failed' ? '失败' : '待处理';
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tbody');
+            if (!tasks.length) return renderEmptyRow(tbody, 8, '暂无排课任务，点击右上角新建');
+            tbody.innerHTML = tasks.map(t => {
+                const p = t.params || {};
+                return `<tr>
+                    <td><strong>${escapeHtml(t.task_name)}</strong></td>
+                    <td>${escapeHtml(t.semester)}</td>
+                    <td><span class="badge bg-light text-dark">${escapeHtml(t.algorithm || 'GA')}</span></td>
+                    <td><small class="text-muted">种群 ${p.populationSize || '--'} / 迭代 ${p.generations || '--'}</small></td>
+                    <td>${statusBadge(statusText(t.status))}</td>
+                    <td>${escapeHtml(t.creator || '--')}</td>
+                    <td><small class="text-muted">${escapeHtml(t.created_at)}</small></td>
+                    <td class="table-actions">
+                        <button class="btn btn-sm btn-success" onclick="runTask('${t.task_id}')" ${running ? 'disabled' : ''}><i class="bi bi-play-fill"></i> 运行</button>
+                        <a class="btn btn-sm btn-outline-primary" href="plans.html"><i class="bi bi-layers"></i></a>
+                        <button class="btn btn-sm btn-outline-danger" onclick="delTask('${t.task_id}','${escapeHtml(t.task_name)}')"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function showCreate() {
+            document.getElementById('taskName').value = '2026-2027学年第二学期排课';
+            document.getElementById('algorithm').value = 'GA';
+            new bootstrap.Modal(document.getElementById('createModal')).show();
+        }
+
+        async function createTask() {
+            const name = document.getElementById('taskName').value.trim();
+            if (!name) return showToast('请输入任务名称', 'warning');
+            const data = {
+                task_name: name,
+                semester: document.getElementById('semester').value,
+                algorithm: document.getElementById('algorithm').value,
+                params: {
+                    populationSize: Number(document.getElementById('populationSize').value),
+                    generations: Number(document.getElementById('generations').value),
+                    timeLimit: Number(document.getElementById('timeLimit').value),
+                    weights: {
+                        preference: Number(document.getElementById('wPref').value),
+                        distribution: Number(document.getElementById('wDist').value),
+                        utilization: Number(document.getElementById('wUtil').value),
+                        gap: Number(document.getElementById('wGap').value),
+                        consecutive: Number(document.getElementById('wCon').value),
+                    },
+                },
+            };
+            try {
+                await SchedulerAPI.addTask(data);
+                showToast('任务创建成功', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+                loadTasks();
+            } catch (err) { showToast('创建失败：' + err.message, 'danger'); }
+        }
+
+        async function runTask(taskId) {
+            const task = tasks.find(t => String(t.task_id) === String(taskId));
+            if (!task) return;
+            if (running) return showToast('已有任务正在运行', 'warning');
+            running = true;
+            renderTable();
+            const modal = new bootstrap.Modal(document.getElementById('runModal'));
+            document.getElementById('runBar').style.width = '0%';
+            document.getElementById('runPercent').textContent = '0%';
+            document.getElementById('runStage').textContent = '正在构建教学任务与候选资源...';
+            document.getElementById('runFitness').textContent = '--';
+            document.getElementById('runHard').textContent = '--';
+            document.getElementById('runGen').textContent = '--';
+            document.getElementById('runLog').textContent = '读取课程、教师、班级、教室与时间偏好...';
+            document.getElementById('runFooter').style.display = 'none';
+            modal.show();
+            const started = Date.now();
+            try {
+                const res = await SchedulerAPI.runTask(taskId, {}, p => {
+                    const pct = Math.round(p.generation / p.total * 100);
+                    document.getElementById('runBar').style.width = pct + '%';
+                    document.getElementById('runPercent').textContent = pct + '%';
+                    document.getElementById('runStage').textContent = `第 ${p.generation} / ${p.total} 代`;
+                    document.getElementById('runFitness').textContent = p.fitness;
+                    document.getElementById('runHard').textContent = p.hard;
+                    document.getElementById('runGen').textContent = p.generation;
+                    document.getElementById('runLog').textContent =
+                        `第 ${p.generation} 代：最优适应度 ${p.fitness}，硬约束冲突 ${p.hard}，软约束惩罚 ${p.soft}`;
+                });
+                const d = res.data || res;
+                document.getElementById('runBar').style.width = '100%';
+                document.getElementById('runPercent').textContent = '100%';
+                document.getElementById('runStage').textContent = '排课完成';
+                document.getElementById('runFitness').textContent = d.fitness;
+                document.getElementById('runHard').textContent = d.hard_conflicts;
+                document.getElementById('runGen').textContent = (d.stats && d.stats.generations) || '--';
+                document.getElementById('runLog').textContent =
+                    (d.logs || []).join('\n') + `\n生成方案 V${d.version}，冲突记录 ${d.conflict_count} 条，用时 ${Date.now() - started} ms。`;
+                document.getElementById('runFooter').style.display = '';
+                const scheduleLink = document.querySelector('#runFooter a[href^="schedule.html"]');
+                if (scheduleLink) scheduleLink.href = 'schedule.html?plan_id=' + d.plan_id;
+                showToast(`排课完成，已生成方案 V${d.version}`, 'success');
+                loadTasks();
+            } catch (err) {
+                document.getElementById('runStage').textContent = '排课失败';
+                document.getElementById('runLog').textContent += '\n错误：' + err.message;
+                showToast('排课失败：' + err.message, 'danger');
+                document.getElementById('runFooter').style.display = '';
+            } finally {
+                running = false;
+                renderTable();
+            }
+        }
+
+        async function delTask(taskId, name) {
+            if (!await confirmAction('删除排课任务', `确定删除任务「${name}」及其关联方案吗？`)) return;
+            try {
+                await SchedulerAPI.deleteTask(taskId);
+                showToast('删除成功', 'success');
+                loadTasks();
+            } catch (err) { showToast('删除失败：' + err.message, 'danger'); }
+        }
+    </script>
+</body>
+</html>

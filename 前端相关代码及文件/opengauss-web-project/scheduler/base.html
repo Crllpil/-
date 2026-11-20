@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>班级与时间段 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="page-header">
+            <h4><i class="bi bi-database-fill me-2"></i>班级与时间段</h4>
+            <p>维护参与排课的班级信息，查看学校统一作息时间段</p>
+        </div>
+
+        <ul class="nav nav-tabs mb-3" id="baseTabs" role="tablist">
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#classPane" type="button">班级管理</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#slotPane" type="button">时间段</button></li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="classPane">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted" style="font-size:.86rem;">班级人数用于校验教室容量</span>
+                    <button class="btn btn-primary-custom" onclick="showAddClass()"><i class="bi bi-plus-lg me-1"></i>新增班级</button>
+                </div>
+                <div class="section-card p-0">
+                    <div class="table-responsive">
+                        <table class="table table-custom mb-0">
+                            <thead><tr><th>班级编号</th><th>班级名称</th><th>年级</th><th>专业</th><th>人数</th><th>操作</th></tr></thead>
+                            <tbody id="classBody"><tr><td colspan="6" class="text-center text-muted py-4">加载中...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="slotPane">
+                <div class="soft-note mb-3"><i class="bi bi-info-circle me-1"></i>时间段采用学校统一作息表：每周 5 个教学日，每天 5 个时间段（每段 2 节）。排课算法以时间段为单位分配课程。</div>
+                <div class="section-card p-0">
+                    <div class="table-responsive">
+                        <table class="table table-custom mb-0">
+                            <thead><tr><th>时间段编号</th><th>星期</th><th>节次</th><th>开始时间</th><th>结束时间</th></tr></thead>
+                            <tbody id="slotBody"><tr><td colspan="5" class="text-center text-muted py-4">加载中...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="classModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title" id="classModalTitle">新增班级</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="editClassId">
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label">班级编号 <span class="text-danger">*</span></label>
+                            <input class="form-control" id="classNo" placeholder="如 CS2303"></div>
+                        <div class="col-md-6"><label class="form-label">班级名称 <span class="text-danger">*</span></label>
+                            <input class="form-control" id="className" placeholder="如 计算机2303班"></div>
+                        <div class="col-md-4"><label class="form-label">年级</label><input class="form-control" id="grade" placeholder="如 2023"></div>
+                        <div class="col-md-8"><label class="form-label">专业</label><input class="form-control" id="major" placeholder="如 计算机科学与技术"></div>
+                        <div class="col-md-4"><label class="form-label">人数</label><input type="number" class="form-control" id="studentCount" min="1" max="300" value="40"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button class="btn btn-primary-custom" onclick="saveClass()"><i class="bi bi-check-lg me-1"></i>保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        renderLayout('scheduler', 'base');
+        let classes = [];
+
+        document.addEventListener('DOMContentLoaded', loadData);
+
+        async function loadData() {
+            showLoading();
+            try {
+                const [cRes, sRes] = await Promise.all([SchedulerAPI.getClasses(), SchedulerAPI.getTimeSlots()]);
+                classes = cRes.data || cRes || [];
+                renderClasses();
+                renderSlots(sRes.data || sRes || []);
+            } catch (err) { showToast('加载失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        function renderClasses() {
+            const tbody = document.getElementById('classBody');
+            if (!classes.length) return renderEmptyRow(tbody, 6, '暂无班级数据');
+            tbody.innerHTML = classes.map(c => `
+                <tr>
+                    <td><code>${escapeHtml(c.class_no)}</code></td>
+                    <td><strong>${escapeHtml(c.name)}</strong></td>
+                    <td>${escapeHtml(c.grade || '--')}</td>
+                    <td>${escapeHtml(c.major || '--')}</td>
+                    <td>${c.student_count} 人</td>
+                    <td class="table-actions">
+                        <button class="btn btn-sm btn-outline-primary" onclick="showEditClass('${c.class_id}')"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="delClass('${c.class_id}','${escapeHtml(c.name)}')"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`).join('');
+        }
+
+        function renderSlots(slots) {
+            const tbody = document.getElementById('slotBody');
+            if (!slots.length) return renderEmptyRow(tbody, 5, '暂无时间段');
+            tbody.innerHTML = slots.map(s => `
+                <tr>
+                    <td><code>${escapeHtml(s.slot_id)}</code></td>
+                    <td>${escapeHtml(s.day_name || DAY_NAMES[Number(s.day) - 1] || '')}</td>
+                    <td>${escapeHtml(s.label || (dayLabel(s.day) + periodLabel(s.period)))}</td>
+                    <td>${escapeHtml(s.start_time)}</td>
+                    <td>${escapeHtml(s.end_time)}</td>
+                </tr>`).join('');
+        }
+
+        function showAddClass() {
+            document.getElementById('classModalTitle').textContent = '新增班级';
+            document.getElementById('editClassId').value = '';
+            document.getElementById('classNo').value = '';
+            document.getElementById('classNo').disabled = false;
+            document.getElementById('className').value = '';
+            document.getElementById('grade').value = '2023';
+            document.getElementById('major').value = '';
+            document.getElementById('studentCount').value = '40';
+            new bootstrap.Modal(document.getElementById('classModal')).show();
+        }
+
+        function showEditClass(id) {
+            const c = classes.find(x => String(x.class_id) === String(id));
+            if (!c) return;
+            document.getElementById('classModalTitle').textContent = '编辑班级';
+            document.getElementById('editClassId').value = c.class_id;
+            document.getElementById('classNo').value = c.class_no;
+            document.getElementById('classNo').disabled = true;
+            document.getElementById('className').value = c.name;
+            document.getElementById('grade').value = c.grade || '';
+            document.getElementById('major').value = c.major || '';
+            document.getElementById('studentCount').value = c.student_count || 40;
+            new bootstrap.Modal(document.getElementById('classModal')).show();
+        }
+
+        async function saveClass() {
+            const id = document.getElementById('editClassId').value;
+            const data = {
+                class_id: id || 'CL' + Date.now().toString(36).toUpperCase(),
+                class_no: document.getElementById('classNo').value.trim(),
+                name: document.getElementById('className').value.trim(),
+                grade: document.getElementById('grade').value.trim(),
+                major: document.getElementById('major').value.trim(),
+                student_count: Number(document.getElementById('studentCount').value),
+            };
+            if (!data.class_no || !data.name) return showToast('请填写班级编号和名称', 'warning');
+            try {
+                if (id) await SchedulerAPI.updateClass(id, data);
+                else await SchedulerAPI.addClass(data);
+                showToast('保存成功', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('classModal')).hide();
+                loadData();
+            } catch (err) { showToast('保存失败：' + err.message, 'danger'); }
+        }
+
+        async function delClass(id, name) {
+            if (!await confirmAction('删除班级', `确定删除班级「${name}」吗？已有课程的班级受约束保护。`)) return;
+            try {
+                await SchedulerAPI.deleteClass(id);
+                showToast('删除成功', 'success');
+                loadData();
+            } catch (err) { showToast('删除失败：' + err.message, 'danger'); }
+        }
+    </script>
+</body>
+</html>

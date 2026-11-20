@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教室管理 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-door-open-fill me-2"></i>教室管理</h4>
+                <p>维护教室类型、容量与可用状态，排课时教室类型须与课程需求匹配</p>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-custom" onclick="showAdd()"><i class="bi bi-plus-lg me-1"></i>新增教室</button>
+            </div>
+        </div>
+
+        <div class="filter-bar">
+            <input type="text" class="form-control" id="keyword" placeholder="🔍 搜索教室编号/名称/楼栋..." oninput="renderTable()">
+            <select class="form-select" id="typeFilter" onchange="renderTable()">
+                <option value="">全部类型</option><option>多媒体</option><option>普通</option><option>机房</option><option>实验室</option><option>体育场</option>
+            </select>
+            <span class="ms-auto text-muted" style="font-size:.85rem;">共 <strong id="totalCount">0</strong> 间教室</span>
+        </div>
+
+        <div class="section-card p-0">
+            <div class="table-responsive">
+                <table class="table table-custom mb-0">
+                    <thead><tr><th>教室编号</th><th>教室名称</th><th>楼栋</th><th>楼层</th><th>类型</th><th>容量</th><th>状态</th><th>操作</th></tr></thead>
+                    <tbody id="tbody"><tr><td colspan="8" class="text-center text-muted py-4">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title" id="modalTitle">新增教室</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="editId">
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label">教室编号 <span class="text-danger">*</span></label>
+                            <input class="form-control" id="roomNo" placeholder="如 A101"></div>
+                        <div class="col-md-6"><label class="form-label">教室名称 <span class="text-danger">*</span></label>
+                            <input class="form-control" id="name" placeholder="如 教学楼A101"></div>
+                        <div class="col-md-6"><label class="form-label">楼栋</label><input class="form-control" id="building" placeholder="如 教学楼A"></div>
+                        <div class="col-md-3"><label class="form-label">楼层</label><input type="number" class="form-control" id="floor" min="1" max="10" value="1"></div>
+                        <div class="col-md-3"><label class="form-label">状态</label>
+                            <select class="form-select" id="status"><option>可用</option><option>维修</option><option>停用</option></select></div>
+                        <div class="col-md-6"><label class="form-label">教室类型</label>
+                            <select class="form-select" id="roomType"><option>多媒体</option><option>普通</option><option>机房</option><option>实验室</option><option>体育场</option></select></div>
+                        <div class="col-md-6"><label class="form-label">容量 <span class="text-danger">*</span></label><input type="number" class="form-control" id="capacity" min="1" max="500" value="60"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button class="btn btn-primary-custom" onclick="saveRoom()"><i class="bi bi-check-lg me-1"></i>保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        renderLayout('scheduler', 'classrooms');
+        let rooms = [];
+
+        document.addEventListener('DOMContentLoaded', loadRooms);
+
+        async function loadRooms() {
+            showLoading();
+            try {
+                const res = await SchedulerAPI.getClassrooms();
+                rooms = res.data || res || [];
+                renderTable();
+            } catch (err) { showToast('加载失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        function renderTable() {
+            const kw = document.getElementById('keyword').value.trim().toLowerCase();
+            const type = document.getElementById('typeFilter').value;
+            const list = rooms.filter(r =>
+                (!kw || (r.room_no + r.name + r.building).toLowerCase().includes(kw)) && (!type || r.room_type === type)
+            );
+            document.getElementById('totalCount').textContent = list.length;
+            const tbody = document.getElementById('tbody');
+            if (!list.length) return renderEmptyRow(tbody, 8, '暂无教室数据');
+            tbody.innerHTML = list.map(r => `
+                <tr>
+                    <td><code>${escapeHtml(r.room_no)}</code></td>
+                    <td><strong>${escapeHtml(r.name)}</strong></td>
+                    <td>${escapeHtml(r.building || '--')}</td>
+                    <td>${r.floor || '--'}</td>
+                    <td><span class="badge bg-light text-dark">${escapeHtml(r.room_type)}</span></td>
+                    <td>${r.capacity} 人</td>
+                    <td>${statusBadge(r.status || '可用')}</td>
+                    <td class="table-actions">
+                        <button class="btn btn-sm btn-outline-primary" onclick="showEdit('${r.room_id}')"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="delRoom('${r.room_id}','${escapeHtml(r.name)}')"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`).join('');
+        }
+
+        function showAdd() {
+            document.getElementById('modalTitle').textContent = '新增教室';
+            document.getElementById('editId').value = '';
+            document.getElementById('roomNo').value = '';
+            document.getElementById('roomNo').disabled = false;
+            document.getElementById('name').value = '';
+            document.getElementById('building').value = '';
+            document.getElementById('floor').value = '1';
+            document.getElementById('status').value = '可用';
+            document.getElementById('roomType').value = '多媒体';
+            document.getElementById('capacity').value = '60';
+            new bootstrap.Modal(document.getElementById('editModal')).show();
+        }
+
+        function showEdit(id) {
+            const r = rooms.find(x => String(x.room_id) === String(id));
+            if (!r) return;
+            document.getElementById('modalTitle').textContent = '编辑教室';
+            document.getElementById('editId').value = r.room_id;
+            document.getElementById('roomNo').value = r.room_no;
+            document.getElementById('roomNo').disabled = true;
+            document.getElementById('name').value = r.name;
+            document.getElementById('building').value = r.building || '';
+            document.getElementById('floor').value = r.floor || 1;
+            document.getElementById('status').value = r.status || '可用';
+            document.getElementById('roomType').value = r.room_type;
+            document.getElementById('capacity').value = r.capacity;
+            new bootstrap.Modal(document.getElementById('editModal')).show();
+        }
+
+        async function saveRoom() {
+            const id = document.getElementById('editId').value;
+            const data = {
+                room_id: id || 'R' + Date.now().toString(36).toUpperCase(),
+                room_no: document.getElementById('roomNo').value.trim(),
+                name: document.getElementById('name').value.trim(),
+                building: document.getElementById('building').value.trim(),
+                floor: Number(document.getElementById('floor').value),
+                status: document.getElementById('status').value,
+                room_type: document.getElementById('roomType').value,
+                capacity: Number(document.getElementById('capacity').value),
+            };
+            if (!data.room_no || !data.name) return showToast('请填写教室编号和名称', 'warning');
+            if (!(data.capacity > 0)) return showToast('容量必须为正整数', 'warning');
+            try {
+                if (id) await SchedulerAPI.updateClassroom(id, data);
+                else await SchedulerAPI.addClassroom(data);
+                showToast('保存成功', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+                loadRooms();
+            } catch (err) { showToast('保存失败：' + err.message, 'danger'); }
+        }
+
+        async function delRoom(id, name) {
+            if (!await confirmAction('删除教室', `确定删除教室「${name}」吗？`)) return;
+            try {
+                await SchedulerAPI.deleteClassroom(id);
+                showToast('删除成功', 'success');
+                loadRooms();
+            } catch (err) { showToast('删除失败：' + err.message, 'danger'); }
+        }
+    </script>
+</body>
+</html>

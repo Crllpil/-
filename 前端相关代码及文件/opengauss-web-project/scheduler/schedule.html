@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课表展示 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-grid-3x3-gap-fill me-2"></i>课表展示</h4>
+                <p>按班级、教师、教室或课程维度查看排课结果，冲突时段以颜色高亮</p>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-outline-secondary" onclick="printPage()"><i class="bi bi-printer me-1"></i>打印</button>
+                <button class="btn btn-outline-secondary" onclick="exportCSV()"><i class="bi bi-download me-1"></i>导出 CSV</button>
+            </div>
+        </div>
+
+        <div class="filter-bar">
+            <select class="form-select" id="planSelect" onchange="loadPlan()" style="max-width:330px;"></select>
+            <select class="form-select" id="dimension" onchange="populateValues()" style="max-width:140px;">
+                <option value="class">按班级</option>
+                <option value="teacher">按教师</option>
+                <option value="room">按教室</option>
+                <option value="course">按课程</option>
+            </select>
+            <select class="form-select" id="dimValue" onchange="renderFiltered()" style="max-width:220px;"></select>
+            <span class="ms-auto text-muted" style="font-size:.85rem;" id="summaryText">--</span>
+        </div>
+
+        <div class="row g-3 mb-3" id="stats"></div>
+
+        <div class="section-card">
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                <div class="section-title mb-0 border-0 pb-0"><i class="bi bi-calendar2-week me-2"></i>周课表</div>
+                <div id="planMeta" class="text-muted" style="font-size:.82rem;"></div>
+            </div>
+            <div id="timetable"><div class="empty-state"><i class="bi bi-hourglass-split"></i><p class="mt-2">加载中...</p></div></div>
+            <div class="tt-legend">
+                <span><i class="legend-dot normal"></i>正常课程</span>
+                <span><i class="legend-dot hard"></i>硬约束冲突</span>
+                <span><i class="legend-dot soft"></i>软约束未满足</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        renderLayout('scheduler', 'schedule');
+        let plans = [], items = [], conflicts = [], currentPlan = null, filtered = [];
+
+        document.addEventListener('DOMContentLoaded', init);
+
+        async function init() {
+            showLoading();
+            try {
+                const res = await SchedulerAPI.getPlans();
+                plans = res.data || res || [];
+                if (!plans.length) {
+                    document.getElementById('timetable').innerHTML = '<div class="empty-state"><i class="bi bi-calendar-x"></i><p class="mt-2">暂无排课方案，请先运行排课任务</p><a href="tasks.html" class="btn btn-primary-custom btn-sm">去排课</a></div>';
+                    return;
+                }
+                const active = plans.find(p => p.is_active === 1) || plans[0];
+                const wanted = new URLSearchParams(location.search).get('plan_id');
+                const selected = (wanted && plans.find(p => String(p.plan_id) === String(wanted))) ? wanted : active.plan_id;
+                renderPlanSelect('planSelect', plans, selected);
+                await loadPlan();
+            } catch (err) { showToast('加载失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        async function loadPlan() {
+            const planId = document.getElementById('planSelect').value;
+            if (!planId) return;
+            showLoading();
+            try {
+                const [itemRes, conflictRes] = await Promise.all([
+                    SchedulerAPI.getPlanItems(planId),
+                    SchedulerAPI.getPlanConflicts(planId),
+                ]);
+                const data = itemRes.data || itemRes;
+                currentPlan = data.plan || null;
+                items = data.items || [];
+                conflicts = conflictRes.data || conflictRes || [];
+                populateValues();
+                renderStats();
+                renderPlanMeta();
+            } catch (err) { showToast('加载课表失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        function populateValues() {
+            const dim = document.getElementById('dimension').value;
+            const map = new Map();
+            items.forEach(it => {
+                let key, text;
+                if (dim === 'class') { key = it.class_id; text = it.class_name || it.class_id; }
+                else if (dim === 'teacher') { key = it.teacher_id; text = it.teacher_name || it.teacher_id; }
+                else if (dim === 'room') { key = it.room_id; text = it.room_name || it.room_id; }
+                else { key = it.course_id; text = it.course_name || it.course_id; }
+                if (!map.has(key)) map.set(key, text);
+            });
+            const sel = document.getElementById('dimValue');
+            sel.innerHTML = Array.from(map.keys()).sort().map(k => `<option value="${escapeHtml(k)}">${escapeHtml(map.get(k))}</option>`).join('');
+            renderFiltered();
+        }
+
+        function renderFiltered() {
+            const dim = document.getElementById('dimension').value;
+            const value = document.getElementById('dimValue').value;
+            filtered = items.filter(it => {
+                if (dim === 'class') return String(it.class_id) === String(value);
+                if (dim === 'teacher') return String(it.teacher_id) === String(value);
+                if (dim === 'room') return String(it.room_id) === String(value);
+                return String(it.course_id) === String(value);
+            });
+            const conflictMap = itemConflictMap(conflicts);
+            renderTimetable('timetable', filtered, {
+                conflictMap,
+                showClass: dim !== 'class',
+                showTeacher: dim !== 'teacher',
+                showRoom: dim !== 'room',
+            });
+            document.getElementById('summaryText').textContent =
+                `当前维度共 ${filtered.length} 个课次 · 硬冲突 ${conflicts.filter(c => c.severity === 'hard').length} · 软约束 ${conflicts.filter(c => c.severity === 'soft').length}`;
+        }
+
+        function renderStats() {
+            const hard = conflicts.filter(c => c.severity === 'hard').length;
+            const soft = conflicts.filter(c => c.severity === 'soft').length;
+            renderStatCards('stats', [
+                { label: '当前方案', value: currentPlan ? 'V' + currentPlan.version : '--', icon: 'bi-layers-fill', color: 'var(--sec)', sub: currentPlan ? currentPlan.task_name : '' },
+                { label: '课表条目', value: items.length, icon: 'bi-calendar2-check', color: 'var(--acc)', sub: '已排课次总数' },
+                { label: '硬约束冲突', value: hard, icon: 'bi-exclamation-octagon-fill', color: hard ? 'var(--danger)' : '#27ae60', sub: hard ? '需处理后才可启用' : '全部满足' },
+                { label: '软约束未满足', value: soft, icon: 'bi-exclamation-triangle-fill', color: soft ? 'var(--warn)' : '#27ae60', sub: '时间偏好、分布等' },
+            ]);
+        }
+
+        function renderPlanMeta() {
+            if (!currentPlan) return;
+            document.getElementById('planMeta').textContent =
+                `${currentPlan.task_name || ''} · ${currentPlan.gen_method || ''} · 适应度 ${currentPlan.fitness} · ${currentPlan.created_at || ''}`;
+        }
+
+        function exportCSV() {
+            if (!filtered.length) return showToast('当前维度暂无课表数据', 'warning');
+            downloadCSV('课表数据.csv', [
+                ['课程', '班级', '教师', '教室', '星期', '节次', '周次'],
+                ...filtered.map(it => [
+                    it.course_name, it.class_name || it.class_id, it.teacher_name || it.teacher_id,
+                    it.room_name || it.room_id, it.day_name || dayLabel(it.day), it.period_label || periodLabel(it.period), it.week_no,
+                ]),
+            ]);
+        }
+    </script>
+</body>
+</html>

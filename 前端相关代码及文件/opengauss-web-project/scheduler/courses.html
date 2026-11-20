@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课程管理 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-book-fill me-2"></i>课程管理</h4>
+                <p>维护课程信息、周学时、授课教师、授课班级与教室类型需求</p>
+            </div>
+            <div class="page-actions">
+                <input type="file" id="importFile" accept=".csv" class="d-none" onchange="importCSV(this)">
+                <button class="btn btn-outline-secondary" onclick="document.getElementById('importFile').click()"><i class="bi bi-upload me-1"></i>批量导入</button>
+                <button class="btn btn-outline-secondary" onclick="exportCSV()"><i class="bi bi-download me-1"></i>导出 CSV</button>
+                <button class="btn btn-primary-custom" onclick="showAdd()"><i class="bi bi-plus-lg me-1"></i>新增课程</button>
+            </div>
+        </div>
+
+        <div class="filter-bar">
+            <input type="text" class="form-control" id="keyword" placeholder="🔍 搜索课程编号/名称/教师..." oninput="applyFilter()">
+            <select class="form-select" id="teacherFilter" onchange="applyFilter()"><option value="">全部教师</option></select>
+            <select class="form-select" id="typeFilter" onchange="applyFilter()">
+                <option value="">全部课程类型</option>
+                <option>专业必修</option><option>专业选修</option><option>公共必修</option><option>公共选修</option>
+            </select>
+            <span class="ms-auto text-muted" style="font-size:.85rem;">共 <strong id="totalCount">0</strong> 门课程</span>
+        </div>
+
+        <div class="section-card p-0">
+            <div class="table-responsive">
+                <table class="table table-custom mb-0">
+                    <thead>
+                        <tr><th>课程编号</th><th>课程名称</th><th>类型</th><th>学分</th><th>总学时</th><th>周学时</th><th>授课教师</th><th>授课班级</th><th>教室类型</th><th>人数</th><th>操作</th></tr>
+                    </thead>
+                    <tbody id="tbody"><tr><td colspan="11" class="text-center text-muted py-4">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title" id="modalTitle">新增课程</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="editId">
+                    <div class="row g-3">
+                        <div class="col-md-4"><label class="form-label">课程编号 <span class="text-danger">*</span></label>
+                            <input class="form-control" id="courseNo" placeholder="如 CS101"></div>
+                        <div class="col-md-8"><label class="form-label">课程名称 <span class="text-danger">*</span></label>
+                            <input class="form-control" id="courseName" placeholder="如 数据结构"></div>
+                        <div class="col-md-4"><label class="form-label">课程类型</label>
+                            <select class="form-select" id="courseType"><option>专业必修</option><option>专业选修</option><option>公共必修</option><option>公共选修</option></select></div>
+                        <div class="col-md-4"><label class="form-label">学分</label><input type="number" class="form-control" id="credit" min="0.5" max="10" step="0.5" value="3"></div>
+                        <div class="col-md-4"><label class="form-label">总学时</label><input type="number" class="form-control" id="totalHours" min="8" step="8" value="48"></div>
+                        <div class="col-md-4"><label class="form-label">周学时 <span class="text-danger">*</span></label><input type="number" class="form-control" id="weeklyHours" min="1" max="6" value="3"></div>
+                        <div class="col-md-4"><label class="form-label">授课教师 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="teacherId"></select></div>
+                        <div class="col-md-4"><label class="form-label">授课班级 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="classId"></select></div>
+                        <div class="col-md-4"><label class="form-label">所需教室类型</label>
+                            <select class="form-select" id="roomType"><option>多媒体</option><option>普通</option><option>机房</option><option>实验室</option><option>体育场</option><option>不限</option></select></div>
+                        <div class="col-md-4"><label class="form-label">修读人数</label><input type="number" class="form-control" id="studentCount" min="1" max="300" value="40"></div>
+                    </div>
+                    <div class="soft-note mt-3"><i class="bi bi-info-circle me-1"></i>周学时表示该课程每周需要安排的课次数，排课算法会将其展开为对应数量的课次。</div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button class="btn btn-primary-custom" id="saveBtn" onclick="saveCourse()"><i class="bi bi-check-lg me-1"></i>保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        renderLayout('scheduler', 'courses');
+        let courses = [], teachers = [], classes = [];
+
+        document.addEventListener('DOMContentLoaded', loadAll);
+
+        async function loadAll() {
+            showLoading();
+            try {
+                const [cRes, tRes, clRes] = await Promise.all([SchedulerAPI.getCourses(), SchedulerAPI.getTeachers(), SchedulerAPI.getClasses()]);
+                courses = cRes.data || cRes || [];
+                teachers = tRes.data || tRes || [];
+                classes = clRes.data || clRes || [];
+                fillSelect('teacherFilter', teachers, 'teacher_id', 'name', '全部教师');
+                renderTable();
+            } catch (err) { showToast('加载失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        function renderTable() {
+            const kw = document.getElementById('keyword').value.trim().toLowerCase();
+            const tid = document.getElementById('teacherFilter').value;
+            const type = document.getElementById('typeFilter').value;
+            const list = courses.filter(c =>
+                (!kw || (c.course_no + c.course_name + (c.teacher_name || '')).toLowerCase().includes(kw)) &&
+                (!tid || String(c.teacher_id) === String(tid)) && (!type || c.course_type === type)
+            );
+            document.getElementById('totalCount').textContent = list.length;
+            const tbody = document.getElementById('tbody');
+            if (!list.length) return renderEmptyRow(tbody, 11, '暂无课程数据');
+            tbody.innerHTML = list.map(c => `
+                <tr>
+                    <td><code>${escapeHtml(c.course_no)}</code></td>
+                    <td><strong>${escapeHtml(c.course_name)}</strong></td>
+                    <td><span class="badge bg-light text-dark">${escapeHtml(c.course_type || '--')}</span></td>
+                    <td>${c.credit}</td>
+                    <td>${c.total_hours}</td>
+                    <td><strong>${c.weekly_hours}</strong></td>
+                    <td>${escapeHtml(c.teacher_name || c.teacher_id)}</td>
+                    <td>${escapeHtml(c.class_name || c.class_id)}</td>
+                    <td>${escapeHtml(c.room_type || '不限')}</td>
+                    <td>${c.student_count}</td>
+                    <td class="table-actions">
+                        <button class="btn btn-sm btn-outline-primary" onclick="showEdit('${c.course_id}')"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="delCourse('${c.course_id}','${escapeHtml(c.course_name)}')"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`).join('');
+        }
+
+        function applyFilter() { renderTable(); }
+
+        function fillFormSelects() {
+            fillSelect('teacherId', teachers, 'teacher_id', 'name', '请选择教师');
+            fillSelect('classId', classes, 'class_id', 'name', '请选择班级');
+        }
+
+        function showAdd() {
+            document.getElementById('modalTitle').textContent = '新增课程';
+            document.getElementById('editId').value = '';
+            document.getElementById('courseNo').value = '';
+            document.getElementById('courseNo').disabled = false;
+            document.getElementById('courseName').value = '';
+            document.getElementById('courseType').value = '专业必修';
+            document.getElementById('credit').value = '3';
+            document.getElementById('totalHours').value = '48';
+            document.getElementById('weeklyHours').value = '3';
+            document.getElementById('roomType').value = '多媒体';
+            document.getElementById('studentCount').value = '40';
+            fillFormSelects();
+            new bootstrap.Modal(document.getElementById('editModal')).show();
+        }
+
+        function showEdit(id) {
+            const c = courses.find(x => String(x.course_id) === String(id));
+            if (!c) return;
+            document.getElementById('modalTitle').textContent = '编辑课程';
+            document.getElementById('editId').value = c.course_id;
+            document.getElementById('courseNo').value = c.course_no;
+            document.getElementById('courseNo').disabled = true;
+            document.getElementById('courseName').value = c.course_name;
+            document.getElementById('courseType').value = c.course_type || '专业必修';
+            document.getElementById('credit').value = c.credit;
+            document.getElementById('totalHours').value = c.total_hours;
+            document.getElementById('weeklyHours').value = c.weekly_hours;
+            document.getElementById('roomType').value = c.room_type || '多媒体';
+            document.getElementById('studentCount').value = c.student_count || 40;
+            fillFormSelects();
+            document.getElementById('teacherId').value = c.teacher_id;
+            document.getElementById('classId').value = c.class_id;
+            new bootstrap.Modal(document.getElementById('editModal')).show();
+        }
+
+        async function saveCourse() {
+            const id = document.getElementById('editId').value;
+            const data = {
+                course_id: id || 'C' + Date.now().toString(36).toUpperCase(),
+                course_no: document.getElementById('courseNo').value.trim(),
+                course_name: document.getElementById('courseName').value.trim(),
+                course_type: document.getElementById('courseType').value,
+                credit: Number(document.getElementById('credit').value),
+                total_hours: Number(document.getElementById('totalHours').value),
+                weekly_hours: Number(document.getElementById('weeklyHours').value),
+                teacher_id: document.getElementById('teacherId').value,
+                class_id: document.getElementById('classId').value,
+                room_type: document.getElementById('roomType').value,
+                student_count: Number(document.getElementById('studentCount').value),
+            };
+            if (!data.course_no || !data.course_name || !data.teacher_id || !data.class_id) {
+                return showToast('请填写课程编号、名称、教师和班级', 'warning');
+            }
+            if (data.total_hours < data.weekly_hours) return showToast('总学时不能小于周学时', 'warning');
+            const btn = document.getElementById('saveBtn');
+            btn.disabled = true;
+            try {
+                if (id) await SchedulerAPI.updateCourse(id, data);
+                else await SchedulerAPI.addCourse(data);
+                showToast('保存成功', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+                loadAll();
+            } catch (err) { showToast('保存失败：' + err.message, 'danger'); }
+            finally { btn.disabled = false; }
+        }
+
+        async function delCourse(id, name) {
+            if (!await confirmAction('删除课程', `确定删除课程「${name}」吗？已参与排课的课程受约束保护。`)) return;
+            try {
+                await SchedulerAPI.deleteCourse(id);
+                showToast('删除成功', 'success');
+                loadAll();
+            } catch (err) { showToast('删除失败：' + err.message, 'danger'); }
+        }
+
+        function exportCSV() {
+            downloadCSV('课程数据.csv', [
+                ['课程编号', '课程名称', '课程类型', '学分', '总学时', '周学时', '授课教师', '授课班级', '教室类型', '修读人数'],
+                ...courses.map(c => [c.course_no, c.course_name, c.course_type, c.credit, c.total_hours, c.weekly_hours, c.teacher_name || c.teacher_id, c.class_name || c.class_id, c.room_type, c.student_count]),
+            ]);
+        }
+
+        async function importCSV(input) {
+            const file = input.files[0];
+            if (!file) return;
+            try {
+                const rows = parseCSV(await file.text());
+                if (rows.length < 2) throw new Error('CSV 文件为空或缺少数据行');
+                let success = 0;
+                for (const r of rows.slice(1)) {
+                    if (!r[0] || !r[1] || !r[6] || !r[7]) continue;
+                    const teacher = teachers.find(t => t.name === r[6] || String(t.teacher_id) === String(r[6]));
+                    const cls = classes.find(c => c.name === r[7] || String(c.class_id) === String(r[7]));
+                    if (!teacher || !cls) continue;
+                    await SchedulerAPI.addCourse({
+                        course_id: 'C' + Date.now().toString(36).toUpperCase() + success,
+                        course_no: r[0], course_name: r[1], course_type: r[2] || '专业必修',
+                        credit: Number(r[3]) || 3, total_hours: Number(r[4]) || 48,
+                        weekly_hours: Number(r[5]) || 3, teacher_id: teacher.teacher_id,
+                        class_id: cls.class_id, room_type: r[8] || '多媒体',
+                        student_count: Number(r[9]) || cls.student_count,
+                    });
+                    success++;
+                }
+                showToast(`导入完成，成功 ${success} 条`, success ? 'success' : 'warning');
+                loadAll();
+            } catch (err) { showToast('导入失败：' + err.message, 'danger'); }
+            finally { input.value = ''; }
+        }
+    </script>
+</body>
+</html>

@@ -1,161 +1,77 @@
-# 学生选课管理系统 — 前端代码及文件
+# 智能校园课程排课与调度系统
 
-## 项目概述
+本项目按照《智能校园课程排课与调度系统_用户需求分析报告》实现，技术栈为 **HTML5 + Bootstrap 5 + Flask + openGauss**，覆盖报告中的 FR-01～FR-10 功能需求。
 
-基于 **HTML5 + Bootstrap 5 + JavaScript (AJAX)** 的学生选课管理系统前端，配合 **Python Flask + openGauss** 后端使用。
+## 目录结构
 
-> **部署环境**：WSL2 (Windows Subsystem for Linux 2) + openEuler + openGauss
+```
+24050236杨欣豪-24050237余泽凯-24050238钟劲森/
+├── app.py                          # Flask 后端（全部 REST API）
+├── scheduler.py                    # Python 遗传算法排课引擎
+├── 前端相关代码及文件/
+│   └── opengauss-web-project/      # 前端页面、样式、JS、离线演示数据
+├── 数据库SQL代码/
+│   ├── 01_ddl_tables.sql           # 13 张业务表
+│   ├── 02_views.sql                # 课表/工作量/利用率等视图
+│   ├── 03_indexes.sql              # 索引
+│   ├── 04_security.sql             # RBAC 角色与权限
+│   ├── 05_triggers.sql             # 冲突校验、方案启用、审计触发器
+│   ├── 06_procedures.sql           # 启用方案、刷新冲突、人工调整等函数
+│   ├── 07_seed_data.sql            # 演示数据
+│   └── README.md                   # 数据库执行说明
+├── 报告文档/                        # 原有课程设计文档
+└── PowerDesigner文件/               # 原有模型文件
+```
 
-系统采用 **B/S 架构**，支持三种角色（学生、教师、管理员），覆盖选课、退课、成绩管理、课表查询、统计报表等完整业务功能。
+## 快速启动
 
-## 技术栈
+### 1. 初始化 openGauss
 
-| 层级 | 技术 |
+```bash
+gsql -d postgres -U omm -W -c "CREATE DATABASE campus_schedule;"
+cd 数据库SQL代码
+for f in 01_ddl_tables.sql 02_views.sql 03_indexes.sql 04_security.sql 05_triggers.sql 06_procedures.sql 07_seed_data.sql; do
+  gsql -d campus_schedule -U omm -W -f "$f"
+done
+```
+
+### 2. 启动后端
+
+```bash
+# 安装依赖（如尚未安装）
+pip3 install -r requirements.txt
+
+su -s /bin/bash - opengauss
+cd /tmp
+python3 /mnt/c/Users/13087/Desktop/24050236杨欣豪-24050237余泽凯-24050238钟劲森/app.py
+```
+
+浏览器访问 `http://localhost:5000`。
+
+### 3. 首次排课
+
+使用教务员账号 `jw_01` 登录，进入 **排课任务**，点击任务的 **运行** 按钮。遗传算法会生成方案，自动写入课表条目与冲突记录；若当前没有启用方案，则自动启用。
+
+## 演示账号
+
+密码均为 `123456`：
+
+| 角色 | 账号 |
 |------|------|
-| 前端 | HTML5 + Bootstrap 5.3 + JavaScript (Fetch API) |
-| 图标 | Bootstrap Icons 1.11 |
-| 后端 | Python Flask 2.3 |
-| 数据库 | openGauss (兼容 PostgreSQL) |
-| 架构 | B/S (Browser/Server) |
+| 系统管理员 | `admin_01` |
+| 教务员 | `jw_01` |
+| 教师 | `T001` ～ `T009` |
+| 学生 | `S001`、`S002` |
 
-## 文件结构
+## 主要功能
 
-```
-前端相关代码及文件/
-├── index.html                    # 登录页面（角色选择+身份认证）
-├── css/
-│   └── style.css                 # 全局自定义样式
-├── js/
-│   ├── api.js                    # 后端API接口封装
-│   └── utils.js                  # 通用工具函数（Session/Toast/Loading等）
-├── student/
-│   ├── dashboard.html            # 学生首页 — 浏览可选课程、筛选、选课
-│   ├── my_courses.html           # 我的课表 — 查看已选课程、退课
-│   └── grades.html               # 成绩查询 — 成绩单、GPA、成绩分布图
-├── teacher/
-│   ├── dashboard.html            # 教师首页 — 授课概览、工作量统计
-│   ├── roster.html               # 学生名单 — 按课程查看选课学生
-│   └── grade_entry.html          # 成绩录入 — 批量录入/修改成绩
-├── admin/
-│   ├── dashboard.html            # 管理员首页 — 系统概览、学院统计
-│   ├── manage_students.html      # 学生管理 — 学生信息CRUD
-│   ├── manage_teachers.html      # 教师管理 — 教师信息CRUD
-│   └── manage_courses.html       # 课程管理 — 课程信息CRUD
-└── README.md                     # 本文件
-```
+- **系统管理员**：用户与权限、角色、操作日志。
+- **教务员**：课程/教师/班级/教室/时间段管理、排课任务、遗传算法自动排课、课表展示、人工调整、冲突检测、方案版本与差异对比、统计报表。
+- **教师**：个人课表、偏好/回避/禁止三级时间偏好。
+- **学生**：班级课表、课程与教室信息。
 
-## 功能模块
+## 说明
 
-### 学生端
-- **可选课程**：浏览全量课程列表，支持按课程名/学院/状态筛选，实时显示课程余量（已满/紧张/有余）
-- **选课操作**：点击选课→确认→调用存储过程完成选课（含容量检测和时间冲突检测）
-- **我的课表**：查看已选课程详情（时间/地点/教师/成绩），支持退课（有成绩或超30天不可退）
-- **成绩查询**：查看已录入成绩、已获学分、GPA绩点，含成绩分布柱状图
-
-### 教师端
-- **课程概览**：查看本学期授课课程、选课人数、工作量统计（授课门数/总人数/及格率/评级）
-- **学生名单**：按课程查看选课学生详细信息，支持打印名单
-- **成绩录入**：批量录入/修改学生成绩（0-100分），修改记录自动写入审计日志
-
-### 管理员端
-- **系统概览**：学生/教师/课程总数统计，各学院选课参与率柱状图，学院级统计报表
-- **学生管理**：学生信息增删改查（学号/姓名/性别/出生日期/学院/密码）
-- **教师管理**：教师信息增删改查（工号/姓名/性别/职称/密码）
-- **课程管理**：课程信息增删改查（课程号/名称/学分/容量/时间/地点/授课教师）
-
-## 数据库表结构
-
-| 表名 | 说明 | 主要字段 |
-|------|------|----------|
-| Student | 学生信息表 | student_id(PK), name, gender, birth_date, college, password |
-| Teacher | 教师信息表 | teacher_id(PK), name, gender, title, password |
-| Course | 课程信息表 | course_id(PK), course_name, credit, capacity, location, schedule_time, teacher_id(FK) |
-| Enrollment | 选课记录表 | enroll_id(PK), student_id(FK), course_id(FK), enroll_time, grade |
-| Grade_Audit_Log | 成绩审计日志 | log_id, enroll_id, old_grade, new_grade, op_time, op_user |
-
-## 数据库视图
-
-| 视图 | 功能 | 技术要点 |
-|------|------|----------|
-| v_StudentCourseSchedule | 学生完整课表 | 4表JOIN |
-| v_CourseRemainingCapacity | 课程余量（含状态标签） | LEFT JOIN + 聚合 + CASE WHEN |
-| v_TeacherStudentRoster | 教师选课学生名单 | 4表JOIN + CASE WHEN |
-| v_StudentTranscript | 学生成绩单（含学分/GPA） | 标量子查询 |
-| v_TeacherWorkload | 教师工作量统计 | 双重LEFT JOIN + 聚合 |
-| v_CollegeEnrollmentStats | 学院选课统计 | LEFT JOIN + 关联子查询 |
-
-## 触发器与存储过程
-
-- **trg_check_capacity**：选课前容量检测（BEFORE INSERT）
-- **trg_enroll_validation**：容量+时间冲突双重校验
-- **trg_audit_grade_update**：成绩修改审计日志（AFTER UPDATE）
-- **trg_prevent_invalid_drop**：退课限制（有成绩/超30天不可退）
-- **sp_student_enroll**：选课存储过程（含事务控制）
-- **sp_calc_student_gpa**：GPA计算存储过程
-- **sp_generate_course_report**：课程报表存储过程
-
-## 权限控制 (RBAC)
-
-| 角色 | 权限 | 说明 |
-|------|------|------|
-| Role_Admin | ALL PRIVILEGES | 全部表的所有操作 |
-| Role_Teacher | SELECT + UPDATE(grade) | 查询，仅能修改成绩列 |
-| Role_Student | SELECT + INSERT + DELETE | 查询课程，选课/退课 |
-
-## 使用方法
-
-### 1. 启动 openGauss 数据库（WSL2 + openEuler）
-
-```bash
-# 在 WSL2 的 openEuler 中启动 openGauss
-gs_ctl start -D /opt/ogdata
-
-# 连接数据库并执行SQL脚本
-gsql -d postgres -U omm -W -f 数据库SQL代码/01_ddl_tables.sql
-gsql -d course_selection -U omm -W -f 数据库SQL代码/02_views.sql
-gsql -d course_selection -U omm -W -f 数据库SQL代码/03_indexes.sql
-gsql -d course_selection -U omm -W -f 数据库SQL代码/04_security.sql
-gsql -d course_selection -U omm -W -f 数据库SQL代码/05_triggers.sql
-gsql -d course_selection -U omm -W -f 数据库SQL代码/06_procedures.sql
-```
-
-### 2. 配置 Flask 后端连接
-
-确保 Flask 后端的数据库连接配置指向 openGauss：
-```python
-# 使用 psycopg2 驱动连接 openGauss
-DB_HOST = 'localhost'      # WSL2 自动转发 localhost
-DB_PORT = 5432             # openGauss 默认端口
-DB_NAME = 'course_selection'
-DB_USER = 'app_admin'      # 或根据角色使用 app_teacher / app_student
-DB_PASSWORD = 'Admin@2025'
-```
-
-### 3. 启动 Flask 后端服务
-
-```bash
-cd backend
-python app.py
-# 默认运行在 http://localhost:5000
-```
-
-### 4. 访问前端
-
-用浏览器打开 `index.html` 登录，默认密码均为 `123456`
-
-### 演示账号
-
-| 角色 | 账号示例 | 密码 |
-|------|----------|------|
-| 学生 | 任意学号 | 123456 |
-| 教师 | 任意工号 | 123456 |
-| 管理员 | admin_01 | 123456 |
-
-## 设计亮点
-
-1. **约束下沉到数据库层**：CHECK、UNIQUE、FOREIGN KEY + 触发器在数据库层保证数据完整性
-2. **视图封装复杂查询**：6个视图覆盖全部业务场景，应用层直接查询视图
-3. **存储过程 + 事务保证 ACID**：选课操作封装为存储过程，异常自动回滚
-4. **RBAC 细粒度权限**：三角色分离 + 列级权限 (UPDATE grade)
-5. **前后端分离**：前端纯静态HTML+AJAX，后端Flask RESTful API
-6. **响应式设计**：Bootstrap 5 栅格系统，适配PC/平板/手机
+- 前端在后端不可用时会自动切换到 `js/mock.js` 的离线演示数据，便于单独展示页面。
+- 数据库脚本执行顺序、表结构和演示数据说明见 `数据库SQL代码/README.md`。
+- 原项目文件已备份为 `app.py_原始备份`、`数据库SQL代码_原始备份`、`前端相关代码及文件/opengauss-web-project_原始备份`。

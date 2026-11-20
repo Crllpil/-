@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>方案版本 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-layers-fill me-2"></i>排课方案与版本管理</h4>
+                <p>保存、对比、启用与回退排课方案，历史版本不可覆盖</p>
+            </div>
+            <div class="page-actions">
+                <a href="tasks.html" class="btn btn-primary-custom"><i class="bi bi-magic me-1"></i>新建排课任务</a>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3" id="stats"></div>
+
+        <div class="section-card p-0">
+            <div class="table-responsive">
+                <table class="table table-custom mb-0">
+                    <thead><tr><th>版本</th><th>任务</th><th>生成方式</th><th>适应度</th><th>硬冲突</th><th>总冲突</th><th>状态</th><th>生成时间</th><th>操作</th></tr></thead>
+                    <tbody id="tbody"><tr><td colspan="9" class="text-center text-muted py-4">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="compareModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">方案差异对比</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6"><label class="form-label">当前方案</label><input class="form-control" id="compareA" disabled></div>
+                        <div class="col-md-6"><label class="form-label">对比方案</label><select class="form-select" id="compareB"></select></div>
+                    </div>
+                    <div class="d-flex gap-2 mb-2">
+                        <button class="btn btn-primary-custom btn-sm" onclick="doCompare()"><i class="bi bi-arrow-left-right me-1"></i>开始对比</button>
+                        <span class="text-muted align-self-center" id="compareSummary" style="font-size:.84rem;"></span>
+                    </div>
+                    <div class="table-responsive" style="max-height:360px;">
+                        <table class="table table-custom mb-0">
+                            <thead><tr><th>课程</th><th>班级</th><th>变化类型</th><th>原安排</th><th>新安排</th></tr></thead>
+                            <tbody id="compareBody"><tr><td colspan="5" class="text-center text-muted py-4">请选择对比方案</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        renderLayout('scheduler', 'plans');
+        let plans = [], comparePlan = null;
+
+        document.addEventListener('DOMContentLoaded', loadPlans);
+
+        async function loadPlans() {
+            showLoading();
+            try {
+                const res = await SchedulerAPI.getPlans();
+                plans = res.data || res || [];
+                renderTable();
+                renderStats();
+            } catch (err) { showToast('加载失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        function renderStats() {
+            const active = plans.find(p => p.is_active === 1);
+            renderStatCards('stats', [
+                { label: '方案总数', value: plans.length, icon: 'bi-layers-fill', color: 'var(--sec)' },
+                { label: '当前启用', value: active ? 'V' + active.version : '--', icon: 'bi-check2-circle', color: '#27ae60', sub: active ? `适应度 ${active.fitness}` : '暂无启用方案' },
+                { label: '无硬冲突方案', value: plans.filter(p => !p.hard_conflicts).length, icon: 'bi-shield-check', color: 'var(--acc)' },
+                { label: '草稿方案', value: plans.filter(p => !p.is_active).length, icon: 'bi-file-earmark', color: 'var(--warn)' },
+            ]);
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tbody');
+            if (!plans.length) return renderEmptyRow(tbody, 9, '暂无排课方案，请先运行排课任务');
+            tbody.innerHTML = plans.map(p => `
+                <tr>
+                    <td><strong>V${p.version}</strong></td>
+                    <td>${escapeHtml(p.task_name || '--')}</td>
+                    <td><small>${escapeHtml(p.gen_method || '--')}</small></td>
+                    <td><strong>${p.fitness}</strong></td>
+                    <td>${p.hard_conflicts ? `<span class="badge bg-danger">${p.hard_conflicts}</span>` : '<span class="badge bg-success">0</span>'}</td>
+                    <td>${p.conflict_count || 0}</td>
+                    <td>${p.is_active ? '<span class="badge bg-success">当前启用</span>' : '<span class="badge bg-secondary">草稿</span>'}</td>
+                    <td><small class="text-muted">${escapeHtml(p.created_at)}</small></td>
+                    <td class="table-actions">
+                        <a class="btn btn-sm btn-outline-primary" href="schedule.html?plan_id=${p.plan_id}"><i class="bi bi-grid"></i> 课表</a>
+                        ${!p.is_active ? `<button class="btn btn-sm btn-outline-success" onclick="activate('${p.plan_id}',${p.version},${p.hard_conflicts})"><i class="bi bi-check2-circle"></i> 启用</button>` : ''}
+                        <button class="btn btn-sm btn-outline-secondary" onclick="showCompare('${p.plan_id}')"><i class="bi bi-arrow-left-right"></i> 对比</button>
+                    </td>
+                </tr>`).join('');
+        }
+
+        async function activate(id, version, hard) {
+            if (hard > 0) return showToast('该方案仍存在硬约束冲突，不能启用', 'danger');
+            if (!await confirmAction('启用方案', `确定将方案 V${version} 设为当前启用方案吗？`)) return;
+            try {
+                await SchedulerAPI.activatePlan(id);
+                showToast(`方案 V${version} 已启用`, 'success');
+                loadPlans();
+            } catch (err) { showToast('启用失败：' + err.message, 'danger'); }
+        }
+
+        function showCompare(planId) {
+            comparePlan = plans.find(p => String(p.plan_id) === String(planId));
+            if (!comparePlan) return;
+            const others = plans.filter(p => p.plan_id !== planId);
+            if (!others.length) return showToast('没有其他方案可用于对比', 'warning');
+            document.getElementById('compareA').value = `V${comparePlan.version} · ${comparePlan.task_name || ''}`;
+            document.getElementById('compareB').innerHTML = others.map(p =>
+                `<option value="${p.plan_id}">V${p.version} · ${p.task_name || ''} · ${p.created_at}</option>`).join('');
+            document.getElementById('compareSummary').textContent = '';
+            document.getElementById('compareBody').innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">请选择对比方案后点击开始对比</td></tr>';
+            new bootstrap.Modal(document.getElementById('compareModal')).show();
+        }
+
+        async function doCompare() {
+            const otherId = document.getElementById('compareB').value;
+            if (!otherId) return;
+            showLoading();
+            try {
+                const res = await SchedulerAPI.comparePlans(comparePlan.plan_id, otherId);
+                const d = res.data || res;
+                document.getElementById('compareSummary').textContent = `共 ${d.changed} 处差异`;
+                const tbody = document.getElementById('compareBody');
+                if (!d.changes.length) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">两个方案的课表安排完全一致</td></tr>';
+                } else {
+                    tbody.innerHTML = d.changes.map(c => `
+                        <tr>
+                            <td>${escapeHtml(c.course_name)}</td>
+                            <td>${escapeHtml(c.class_id)}</td>
+                            <td><span class="badge bg-warning text-dark">${escapeHtml(c.type)}</span></td>
+                            <td><small>${escapeHtml(c.from || '--')}</small></td>
+                            <td><small>${escapeHtml(c.to || '--')}</small></td>
+                        </tr>`).join('');
+                }
+            } catch (err) { showToast('对比失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+    </script>
+</body>
+</html>

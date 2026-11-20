@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的概览 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-speedometer2 me-2"></i>教师工作台</h4>
+                <p>查看本人授课课程、周课表与时间偏好设置</p>
+            </div>
+            <div class="page-actions">
+                <a href="preferences.html" class="btn btn-outline-secondary"><i class="bi bi-sliders me-1"></i>设置时间偏好</a>
+                <a href="schedule.html" class="btn btn-primary-custom"><i class="bi bi-calendar2-week me-1"></i>查看我的课表</a>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4" id="stats"></div>
+
+        <div class="row g-3">
+            <div class="col-lg-7">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-calendar-day me-2"></i>今日课程</div>
+                    <div id="todayList"><p class="text-muted text-center py-4 mb-0">加载中...</p></div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-info-circle me-2"></i>当前排课方案</div>
+                    <div id="planPanel"><p class="text-muted mb-0">加载中...</p></div>
+                    <div class="soft-note mt-3">
+                        <i class="bi bi-info-circle me-1"></i>我的时间偏好中，“禁止”时段不会被安排课程，“回避”时段将作为软约束尽量避让。
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title"><i class="bi bi-book me-2"></i>我的授课课程</div>
+            <div class="row g-3" id="courseList"><div class="col-12 text-center text-muted py-4">加载中...</div></div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        const user = renderLayout('teacher', 'dashboard');
+        let dashboard = null;
+
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+
+        async function loadDashboard() {
+            showLoading();
+            try {
+                const res = await TeacherAPI.getDashboard(user.teacher_id);
+                dashboard = res.data || res;
+                renderStats();
+                renderToday();
+                renderPlan();
+                renderCourses();
+            } catch (err) { showToast('加载失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        function renderStats() {
+            const s = dashboard.stats || {};
+            renderStatCards('stats', [
+                { label: '授课门数', value: s.course_count || 0, icon: 'bi-book-fill', color: 'var(--sec)' },
+                { label: '周课时', value: s.weekly_hours || 0, icon: 'bi-clock-history', color: 'var(--acc)', sub: '节/周' },
+                { label: '授课班级', value: s.class_count || 0, icon: 'bi-people-fill', color: 'var(--warn)' },
+                { label: '偏好设置', value: s.preference_count || 0, icon: 'bi-sliders', color: 'var(--pri)', sub: s.avoid_conflicts ? `${s.avoid_conflicts} 个课次落在回避时段` : '当前无回避时段冲突' },
+            ]);
+        }
+
+        function todayDay() {
+            const d = new Date().getDay();
+            return d === 0 ? 1 : Math.min(d, 5);
+        }
+
+        function renderToday() {
+            const day = todayDay();
+            const items = (dashboard.items || []).filter(it => Number(it.day) === day)
+                .sort((a, b) => a.period - b.period);
+            const el = document.getElementById('todayList');
+            if (!items.length) {
+                el.innerHTML = '<div class="empty-state"><i class="bi bi-cup-hot"></i><p class="mt-2 mb-0">今天没有课程安排</p></div>';
+                return;
+            }
+            el.innerHTML = `<div class="table-responsive"><table class="table table-custom mb-0">
+                <thead><tr><th>节次</th><th>课程</th><th>班级</th><th>教室</th></tr></thead>
+                <tbody>${items.map(it => `
+                    <tr>
+                        <td><strong>${escapeHtml(it.period_label || periodLabel(it.period))}</strong></td>
+                        <td>${escapeHtml(it.course_name)}</td>
+                        <td>${escapeHtml(it.class_name || it.class_id)}</td>
+                        <td>${escapeHtml(it.room_name || it.room_id)}</td>
+                    </tr>`).join('')}</tbody>
+            </table></div>`;
+        }
+
+        function renderPlan() {
+            const el = document.getElementById('planPanel');
+            const p = dashboard.plan;
+            if (!p) { el.innerHTML = '<p class="text-muted mb-0">当前学期暂无启用方案</p>'; return; }
+            el.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-bold" style="font-size:1.4rem;color:var(--pri);">V${p.version}</div>
+                        <div class="text-muted" style="font-size:.82rem;">${escapeHtml(p.task_name || '')}</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="badge bg-success">当前启用</div>
+                        <div class="text-muted mt-1" style="font-size:.78rem;">适应度 ${p.fitness}</div>
+                    </div>
+                </div>`;
+        }
+
+        function renderCourses() {
+            const el = document.getElementById('courseList');
+            const courses = dashboard.courses || [];
+            if (!courses.length) { el.innerHTML = '<div class="col-12 text-center text-muted py-4">暂无授课课程</div>'; return; }
+            el.innerHTML = courses.map(c => `
+                <div class="col-xl-4 col-md-6">
+                    <div class="card course-card h-100">
+                        <div class="card-body">
+                            <h6 class="fw-bold mb-2" style="color:var(--pri);">${escapeHtml(c.course_name)}</h6>
+                            <div class="mb-1" style="font-size:.82rem;"><span class="text-muted">课程编号：</span>${escapeHtml(c.course_no)}</div>
+                            <div class="mb-1" style="font-size:.82rem;"><span class="text-muted">授课班级：</span>${escapeHtml(c.class_name || c.class_id)}</div>
+                            <div class="mb-1" style="font-size:.82rem;"><span class="text-muted">周学时：</span><strong>${c.weekly_hours}</strong> 节</div>
+                            <div style="font-size:.82rem;"><span class="text-muted">类型：</span>${escapeHtml(c.course_type)}</div>
+                        </div>
+                    </div>
+                </div>`).join('');
+        }
+    </script>
+</body>
+</html>

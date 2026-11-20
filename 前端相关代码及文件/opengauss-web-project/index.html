@@ -3,22 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>学生选课管理系统 - 登录</title>
-    <!-- Bootstrap 5 CSS -->
+    <title>智能校园课程排课与调度系统 - 登录</title>
+    <link rel="icon" href="favicon.ico">
     <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="login-page">
     <div class="login-card">
         <div class="login-header">
-            <i class="bi bi-mortarboard-fill" style="font-size:2.5rem;color:var(--sec);"></i>
-            <h3>学生选课管理系统</h3>
-            <p>Student Course Selection System</p>
+            <i class="bi bi-calendar2-week-fill" style="font-size:2.5rem;color:var(--sec);"></i>
+            <h3>智能校园课程排课与调度系统</h3>
+            <p>Intelligent Campus Course Scheduling &amp; Dispatch System</p>
         </div>
 
-        <!-- 角色选择 -->
         <div class="role-selector" id="roleSelector">
             <div class="role-option selected" data-role="student" onclick="selectRole('student', this)">
                 <i class="bi bi-person-fill"></i>
@@ -28,13 +26,16 @@
                 <i class="bi bi-person-workspace"></i>
                 <span class="role-label">教 师</span>
             </div>
+            <div class="role-option" data-role="scheduler" onclick="selectRole('scheduler', this)">
+                <i class="bi bi-calendar-check-fill"></i>
+                <span class="role-label">教务员</span>
+            </div>
             <div class="role-option" data-role="admin" onclick="selectRole('admin', this)">
                 <i class="bi bi-shield-lock-fill"></i>
                 <span class="role-label">管理员</span>
             </div>
         </div>
 
-        <!-- 登录表单 -->
         <form id="loginForm" onsubmit="return handleLogin(event)">
             <div class="mb-3">
                 <label class="form-label">
@@ -45,9 +46,7 @@
                        placeholder="请输入学号" required autocomplete="off">
             </div>
             <div class="mb-3">
-                <label class="form-label">
-                    <i class="bi bi-lock-fill me-1"></i>密 码
-                </label>
+                <label class="form-label"><i class="bi bi-lock-fill me-1"></i>密 码</label>
                 <input type="password" class="form-control" id="password"
                        placeholder="请输入密码" required>
             </div>
@@ -56,17 +55,20 @@
             </button>
         </form>
 
-        <p class="text-center mt-3 mb-0" style="font-size:.78rem;color:var(--lit);">
-            默认密码：123456 ｜ 请及时修改密码
-        </p>
+        <div class="demo-accounts mt-3">
+            <div class="mb-1"><i class="bi bi-info-circle me-1"></i>演示账号（密码均为 <code>123456</code>）：</div>
+            <div>学生 <code>S001</code> ｜ 教师 <code>T001</code> ｜ 教务员 <code>jw_01</code> ｜ 管理员 <code>admin_01</code></div>
+            <div class="mt-1 text-muted">未启动 Flask 后端时自动使用本地演示数据。</div>
+        </div>
     </div>
 
-    <!-- Toast 容器 -->
     <div class="toast-container" id="toastContainer"></div>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="js/algorithm.js"></script>
     <script src="js/api.js"></script>
     <script src="js/utils.js"></script>
+    <script src="js/mock.js"></script>
     <script>
         let selectedRole = 'student';
 
@@ -74,9 +76,13 @@
             selectedRole = role;
             document.querySelectorAll('.role-option').forEach(o => o.classList.remove('selected'));
             el.classList.add('selected');
-            // 更新输入框标签
-            const labelMap = { student: '学 号', teacher: '工 号', admin: '管理员账号' };
-            const placeholderMap = { student: '请输入学号', teacher: '请输入教师工号', admin: '请输入管理员账号' };
+            const labelMap = { student: '学 号', teacher: '工 号', scheduler: '教务员工号', admin: '管理员账号' };
+            const placeholderMap = {
+                student: '请输入学号（如 S001）',
+                teacher: '请输入教师工号（如 T001）',
+                scheduler: '请输入教务员工号（如 jw_01）',
+                admin: '请输入管理员账号（如 admin_01）',
+            };
             document.getElementById('idLabel').innerText = labelMap[role];
             document.getElementById('uid').placeholder = placeholderMap[role];
         }
@@ -85,27 +91,26 @@
             e.preventDefault();
             const uid = document.getElementById('uid').value.trim();
             const password = document.getElementById('password').value.trim();
-
             if (!uid || !password) {
                 showToast('请输入账号和密码', 'warning');
                 return false;
             }
-
             showLoading();
             try {
                 const result = await loginAPI(uid, password, selectedRole);
+                const info = result.data || result;
                 setSession({
-                    uid: uid,
-                    role: selectedRole,
-                    name: result.name || uid,
-                    token: result.token || '',
-                    college: result.college || '',
+                    uid: info.uid || uid,
+                    role: info.role || selectedRole,
+                    name: info.name || uid,
+                    token: info.token || '',
+                    teacher_id: info.teacher_id || null,
+                    class_id: info.class_id || null,
                 });
-
-                // 跳转到对应角色主页
                 const dashMap = {
                     student: 'student/dashboard.html',
                     teacher: 'teacher/dashboard.html',
+                    scheduler: 'scheduler/dashboard.html',
                     admin: 'admin/dashboard.html',
                 };
                 window.location.href = dashMap[selectedRole];

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>排课概览 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-speedometer2 me-2"></i>排课工作台</h4>
+                <p>集中查看基础数据、排课方案、冲突与任务运行状态</p>
+            </div>
+            <div class="page-actions">
+                <a href="tasks.html" class="btn btn-primary-custom"><i class="bi bi-magic me-1"></i>新建排课任务</a>
+                <a href="schedule.html" class="btn btn-outline-secondary"><i class="bi bi-grid-3x3-gap me-1"></i>查看课表</a>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4" id="stats"></div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-lg-8">
+                <div class="plan-banner h-100" id="planBanner">
+                    <div class="text-white-50">加载中...</div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="section-card h-100 mb-0">
+                    <div class="section-title"><i class="bi bi-exclamation-triangle me-2"></i>冲突概况</div>
+                    <div id="conflictPanel"><p class="text-muted mb-0">加载中...</p></div>
+                    <div class="d-grid gap-2 mt-3">
+                        <a href="conflicts.html" class="btn btn-outline-danger btn-sm"><i class="bi bi-list-check me-1"></i>进入冲突检测</a>
+                        <a href="adjust.html" class="btn btn-outline-warning btn-sm"><i class="bi bi-pencil-square me-1"></i>人工调整课表</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-lg-7">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-list-task me-2"></i>最近排课任务</div>
+                    <div class="table-responsive">
+                        <table class="table table-custom mb-0">
+                            <thead><tr><th>任务名称</th><th>学期</th><th>算法</th><th>状态</th><th>创建时间</th></tr></thead>
+                            <tbody id="taskBody"><tr><td colspan="5" class="text-center text-muted py-4">加载中...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-lightning-charge me-2"></i>快捷操作</div>
+                    <div class="row g-2">
+                        <div class="col-6"><a href="courses.html" class="btn btn-outline-primary w-100 py-3"><i class="bi bi-book d-block fs-5 mb-1"></i>课程管理</a></div>
+                        <div class="col-6"><a href="teachers.html" class="btn btn-outline-success w-100 py-3"><i class="bi bi-person-workspace d-block fs-5 mb-1"></i>教师管理</a></div>
+                        <div class="col-6"><a href="classrooms.html" class="btn btn-outline-warning w-100 py-3"><i class="bi bi-door-open d-block fs-5 mb-1"></i>教室管理</a></div>
+                        <div class="col-6"><a href="plans.html" class="btn btn-outline-secondary w-100 py-3"><i class="bi bi-layers d-block fs-5 mb-1"></i>方案版本</a></div>
+                        <div class="col-6"><a href="reports.html" class="btn btn-outline-info w-100 py-3"><i class="bi bi-bar-chart d-block fs-5 mb-1"></i>统计报表</a></div>
+                        <div class="col-6"><a href="base.html" class="btn btn-outline-dark w-100 py-3"><i class="bi bi-database d-block fs-5 mb-1"></i>班级与时间</a></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        renderLayout('scheduler', 'dashboard');
+
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+
+        async function loadDashboard() {
+            showLoading();
+            try {
+                const res = await SchedulerAPI.getDashboard();
+                const d = res.data || res;
+                renderStatCards('stats', [
+                    { label: '课程总数', value: d.total_courses, icon: 'bi-book-fill', color: 'var(--sec)', sub: `${d.total_classes} 个班级参与排课` },
+                    { label: '教师总数', value: d.total_teachers, icon: 'bi-person-workspace', color: 'var(--acc)', sub: '含时间偏好配置' },
+                    { label: '教室总数', value: d.total_rooms, icon: 'bi-door-open-fill', color: 'var(--warn)', sub: `整体利用率 ${d.utilization}%` },
+                    { label: '当前方案', value: d.active_plan ? 'V' + d.active_plan.version : '--', icon: 'bi-calendar2-check-fill', color: d.active_plan ? '#27ae60' : 'var(--lit)', sub: d.active_plan ? `适应度 ${d.active_plan.fitness}` : '暂无启用方案' },
+                ]);
+                renderPlan(d.active_plan, d.conflicts, d.utilization);
+                renderConflicts(d.conflicts);
+                renderTasks(d.recent_tasks || []);
+            } catch (err) {
+                showToast('加载失败：' + err.message, 'danger');
+            } finally { hideLoading(); }
+        }
+
+        function renderPlan(plan, conflicts, utilization) {
+            const el = document.getElementById('planBanner');
+            if (!plan) {
+                el.innerHTML = '<div class="text-center py-4"><i class="bi bi-calendar-x fs-2"></i><p class="mt-2 mb-2">当前没有启用的排课方案</p><a href="tasks.html" class="btn btn-light btn-sm">去创建排课任务</a></div>';
+                return;
+            }
+            el.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                    <div>
+                        <div class="plan-meta">当前启用方案 · ${escapeHtml(plan.task_name || '')}</div>
+                        <div class="plan-version">V${plan.version}</div>
+                        <div class="plan-meta">${escapeHtml(plan.gen_method || '')} · ${escapeHtml(plan.created_at || '')}</div>
+                        <div class="mt-3 d-flex gap-2">
+                            <a href="schedule.html" class="btn btn-light btn-sm"><i class="bi bi-grid me-1"></i>查看课表</a>
+                            <a href="plans.html" class="btn btn-outline-light btn-sm"><i class="bi bi-layers me-1"></i>方案版本</a>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-4 flex-wrap">
+                        <div class="metric"><strong>${plan.item_count || 0}</strong><span class="plan-meta">课表条目</span></div>
+                        <div class="metric"><strong>${plan.fitness || '--'}</strong><span class="plan-meta">适应度</span></div>
+                        <div class="metric"><strong>${utilization}%</strong><span class="plan-meta">教室利用率</span></div>
+                        <div class="metric"><strong>${conflicts.hard}</strong><span class="plan-meta">硬冲突</span></div>
+                    </div>
+                </div>`;
+        }
+
+        function renderConflicts(c) {
+            const el = document.getElementById('conflictPanel');
+            if (!c.hard && !c.soft) {
+                el.innerHTML = '<div class="text-center py-3"><i class="bi bi-check-circle-fill text-success fs-2"></i><p class="mt-2 mb-0">当前方案无冲突</p><small class="text-muted">硬约束与软约束均满足</small></div>';
+                return;
+            }
+            el.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted" style="font-size:.85rem;">硬约束冲突</span>
+                    <span class="badge bg-danger">${c.hard} 条</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted" style="font-size:.85rem;">软约束未满足</span>
+                    <span class="badge bg-warning text-dark">${c.soft} 条</span>
+                </div>`;
+        }
+
+        function renderTasks(tasks) {
+            const tbody = document.getElementById('taskBody');
+            if (!tasks.length) return renderEmptyRow(tbody, 5, '暂无排课任务');
+            tbody.innerHTML = tasks.map(t => `
+                <tr>
+                    <td><strong>${escapeHtml(t.task_name)}</strong></td>
+                    <td>${escapeHtml(t.semester)}</td>
+                    <td><span class="badge bg-light text-dark">${escapeHtml(t.algorithm)}</span></td>
+                    <td>${statusBadge(t.status === 'completed' ? '完成' : t.status === 'running' ? '运行中' : t.status === 'failed' ? '失败' : '待处理')}</td>
+                    <td><small class="text-muted">${escapeHtml(t.created_at)}</small></td>
+                </tr>`).join('');
+        }
+    </script>
+</body>
+</html>

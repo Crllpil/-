@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>操作日志 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-journal-text me-2"></i>操作日志</h4>
+                <p>记录用户管理、排课、方案变更与人工调整等关键操作，支持安全审计</p>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-outline-secondary" onclick="exportLogs()"><i class="bi bi-download me-1"></i>导出 CSV</button>
+            </div>
+        </div>
+
+        <div class="filter-bar">
+            <input type="text" class="form-control" id="keyword" placeholder="🔍 搜索操作人/操作/对象...">
+            <span class="ms-auto text-muted" style="font-size:.85rem;">共 <strong id="totalCount">0</strong> 条记录</span>
+        </div>
+
+        <div class="section-card p-0">
+            <div class="table-responsive">
+                <table class="table table-custom mb-0">
+                    <thead><tr><th>日志编号</th><th>操作时间</th><th>操作人</th><th>操作</th><th>操作对象</th><th>详情</th></tr></thead>
+                    <tbody id="tbody"><tr><td colspan="6" class="text-center text-muted py-4">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        renderLayout('admin', 'logs');
+        let logs = [];
+
+        document.addEventListener('DOMContentLoaded', loadLogs);
+        const debouncedLoad = debounce(loadLogs, 250);
+        document.getElementById('keyword').addEventListener('input', debouncedLoad);
+
+        async function loadLogs() {
+            try {
+                const res = await AdminAPI.getLogs({ keyword: document.getElementById('keyword').value.trim() });
+                logs = res.data || res || [];
+                const tbody = document.getElementById('tbody');
+                document.getElementById('totalCount').textContent = logs.length;
+                if (!logs.length) return renderEmptyRow(tbody, 6, '暂无匹配日志');
+                tbody.innerHTML = logs.map(l => `
+                    <tr>
+                        <td><code>${escapeHtml(l.log_id)}</code></td>
+                        <td><small>${escapeHtml(l.op_time)}</small></td>
+                        <td><code>${escapeHtml(l.op_user)}</code></td>
+                        <td><strong>${escapeHtml(l.action)}</strong></td>
+                        <td>${escapeHtml(l.target || '--')}</td>
+                        <td><small class="text-muted">${escapeHtml(l.detail || '--')}</small></td>
+                    </tr>`).join('');
+            } catch (err) { showToast('加载日志失败：' + err.message, 'danger'); }
+        }
+
+        function exportLogs() {
+            if (!logs.length) return showToast('暂无数据可导出', 'warning');
+            downloadCSV('操作日志.csv', [
+                ['日志编号', '操作时间', '操作人', '操作', '操作对象', '详情'],
+                ...logs.map(l => [l.log_id, l.op_time, l.op_user, l.action, l.target, l.detail]),
+            ]);
+        }
+    </script>
+</body>
+</html>

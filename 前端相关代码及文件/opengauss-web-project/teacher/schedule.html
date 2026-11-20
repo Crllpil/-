@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的课表 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-calendar2-week-fill me-2"></i>我的课表</h4>
+                <p>按周查看本人授课安排，含课程、班级、教室与节次</p>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-outline-secondary" onclick="printPage()"><i class="bi bi-printer me-1"></i>打印</button>
+                <button class="btn btn-outline-secondary" onclick="exportCSV()"><i class="bi bi-download me-1"></i>导出 CSV</button>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3" id="stats"></div>
+
+        <div class="section-card">
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                <div class="section-title mb-0 border-0 pb-0"><i class="bi bi-grid-3x3-gap me-2"></i>周课表</div>
+                <div class="text-muted" style="font-size:.82rem;" id="planMeta"></div>
+            </div>
+            <div id="timetable"><div class="empty-state"><i class="bi bi-hourglass-split"></i><p class="mt-2">加载中...</p></div></div>
+            <div class="tt-legend">
+                <span><i class="legend-dot normal"></i>正常课程</span>
+                <span><i class="legend-dot soft"></i>与时间偏好相关</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        const user = renderLayout('teacher', 'schedule');
+        let items = [], plan = null;
+
+        document.addEventListener('DOMContentLoaded', loadSchedule);
+
+        async function loadSchedule() {
+            showLoading();
+            try {
+                const res = await TeacherAPI.getSchedule(user.teacher_id);
+                const d = res.data || res;
+                items = d.items || [];
+                plan = d.plan || null;
+                const conflictMap = itemConflictMap(items.flatMap(it => it.conflicts || []));
+                renderTimetable('timetable', items, {
+                    conflictMap,
+                    showClass: true,
+                    showTeacher: false,
+                    showRoom: true,
+                });
+                renderStats(conflictMap);
+                document.getElementById('planMeta').textContent = plan
+                    ? `${plan.task_name || ''} · 方案 V${plan.version} · 适应度 ${plan.fitness}`
+                    : '当前暂无启用方案';
+            } catch (err) { showToast('加载课表失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        function renderStats(conflictMap) {
+            const courseCount = new Set(items.map(i => i.course_id)).size;
+            const classCount = new Set(items.map(i => i.class_id)).size;
+            const soft = items.filter(i => i.has_soft_conflict || i.has_hard_conflict).length;
+            renderStatCards('stats', [
+                { label: '本周课次', value: items.length, icon: 'bi-calendar-check', color: 'var(--sec)' },
+                { label: '授课课程', value: courseCount, icon: 'bi-book-fill', color: 'var(--acc)' },
+                { label: '授课班级', value: classCount, icon: 'bi-people-fill', color: 'var(--warn)' },
+                { label: '偏好相关提示', value: soft, icon: 'bi-sliders', color: soft ? 'var(--warn)' : '#27ae60', sub: soft ? '存在回避时段安排' : '课表符合时间偏好' },
+            ]);
+        }
+
+        function exportCSV() {
+            if (!items.length) return showToast('暂无课表数据', 'warning');
+            downloadCSV('我的课表.csv', [
+                ['课程', '班级', '教室', '星期', '节次', '周次'],
+                ...items.map(it => [it.course_name, it.class_name || it.class_id, it.room_name || it.room_id, it.day_name || dayLabel(it.day), it.period_label || periodLabel(it.period), it.week_no]),
+            ]);
+        }
+    </script>
+</body>
+</html>

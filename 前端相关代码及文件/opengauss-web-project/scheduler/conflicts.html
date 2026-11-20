@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>冲突检测 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-exclamation-triangle-fill me-2"></i>冲突检测与提示</h4>
+                <p>检测教师冲突、班级冲突、教室冲突、容量不足与教师时间偏好等约束</p>
+            </div>
+            <div class="page-actions">
+                <a href="adjust.html" class="btn btn-warning-custom"><i class="bi bi-pencil-square me-1"></i>去人工调整</a>
+            </div>
+        </div>
+
+        <div class="filter-bar">
+            <select class="form-select" id="planSelect" onchange="loadConflicts()" style="max-width:330px;"></select>
+            <select class="form-select" id="severity" onchange="applyFilter()" style="max-width:150px;">
+                <option value="">全部级别</option><option value="hard">硬约束（红）</option><option value="soft">软约束（黄）</option>
+            </select>
+            <input type="text" class="form-control" id="keyword" placeholder="🔍 搜索冲突类型/描述..." oninput="applyFilter()">
+            <span class="ms-auto text-muted" style="font-size:.85rem;">共 <strong id="totalCount">0</strong> 条</span>
+        </div>
+
+        <div class="row g-3 mb-3" id="stats"></div>
+
+        <div class="section-card p-0">
+            <div class="table-responsive">
+                <table class="table table-custom mb-0">
+                    <thead><tr><th>编号</th><th>冲突类型</th><th>级别</th><th>冲突描述</th><th>处理状态</th><th>操作</th></tr></thead>
+                    <tbody id="tbody"><tr><td colspan="6" class="text-center text-muted py-4">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="detailModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">冲突详情</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body" id="detailBody"></div>
+                <div class="modal-footer">
+                    <a href="adjust.html" class="btn btn-warning-custom"><i class="bi bi-pencil-square me-1"></i>前往调整</a>
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        renderLayout('scheduler', 'conflicts');
+        let plans = [], conflicts = [], filtered = [];
+
+        document.addEventListener('DOMContentLoaded', init);
+
+        async function init() {
+            showLoading();
+            try {
+                const res = await SchedulerAPI.getPlans();
+                plans = res.data || res || [];
+                if (!plans.length) {
+                    document.getElementById('tbody').innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">暂无排课方案</td></tr>';
+                    return;
+                }
+                const active = plans.find(p => p.is_active === 1) || plans[0];
+                renderPlanSelect('planSelect', plans, active.plan_id);
+                await loadConflicts();
+            } catch (err) { showToast('加载失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        async function loadConflicts() {
+            const planId = document.getElementById('planSelect').value;
+            if (!planId) return;
+            showLoading();
+            try {
+                const res = await SchedulerAPI.getPlanConflicts(planId);
+                conflicts = res.data || res || [];
+                applyFilter();
+                renderStats();
+            } catch (err) { showToast('加载冲突失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        function applyFilter() {
+            const sev = document.getElementById('severity').value;
+            const kw = document.getElementById('keyword').value.trim().toLowerCase();
+            filtered = conflicts.filter(c =>
+                (!sev || c.severity === sev) &&
+                (!kw || (c.conflict_type + c.description).toLowerCase().includes(kw))
+            );
+            renderTable();
+        }
+
+        function renderStats() {
+            const hard = conflicts.filter(c => c.severity === 'hard').length;
+            const soft = conflicts.filter(c => c.severity === 'soft').length;
+            const resolved = conflicts.filter(c => c.status === 'resolved').length;
+            renderStatCards('stats', [
+                { label: '冲突总数', value: conflicts.length, icon: 'bi-list-check', color: 'var(--sec)' },
+                { label: '硬约束冲突', value: hard, icon: 'bi-exclamation-octagon-fill', color: hard ? 'var(--danger)' : '#27ae60', sub: '阻断方案启用' },
+                { label: '软约束未满足', value: soft, icon: 'bi-exclamation-triangle-fill', color: soft ? 'var(--warn)' : '#27ae60' },
+                { label: '已处理', value: resolved, icon: 'bi-check2-circle', color: '#27ae60' },
+            ]);
+        }
+
+        function renderTable() {
+            document.getElementById('totalCount').textContent = filtered.length;
+            const tbody = document.getElementById('tbody');
+            if (!filtered.length) return renderEmptyRow(tbody, 6, conflicts.length ? '没有符合条件的冲突' : '当前方案无冲突，所有约束均满足');
+            tbody.innerHTML = filtered.map(c => `
+                <tr>
+                    <td><code>${escapeHtml(c.conflict_id)}</code></td>
+                    <td><strong>${escapeHtml(c.conflict_type)}</strong></td>
+                    <td>${c.severity === 'hard' ? '<span class="badge bg-danger">硬约束</span>' : '<span class="badge bg-warning text-dark">软约束</span>'}</td>
+                    <td><div class="conflict-desc">${escapeHtml(c.description)}</div></td>
+                    <td>${c.status === 'resolved' ? '<span class="badge bg-success">已处理</span>' : '<span class="badge bg-secondary">待处理</span>'}</td>
+                    <td class="table-actions">
+                        <button class="btn btn-sm btn-outline-primary" onclick="showDetail('${c.conflict_id}')"><i class="bi bi-search"></i> 详情</button>
+                        ${c.status !== 'resolved' ? `<button class="btn btn-sm btn-outline-success" onclick="resolve('${c.conflict_id}')"><i class="bi bi-check2"></i> 已处理</button>` : ''}
+                    </td>
+                </tr>`).join('');
+        }
+
+        function showDetail(id) {
+            const c = conflicts.find(x => String(x.conflict_id) === String(id));
+            if (!c) return;
+            document.getElementById('detailBody').innerHTML = `
+                <table class="table table-bordered mb-0">
+                    <tr><td class="text-muted" width="110">编号</td><td><code>${escapeHtml(c.conflict_id)}</code></td></tr>
+                    <tr><td class="text-muted">类型</td><td>${escapeHtml(c.conflict_type)}</td></tr>
+                    <tr><td class="text-muted">级别</td><td>${c.severity === 'hard' ? '硬约束（必须处理）' : '软约束（尽量满足）'}</td></tr>
+                    <tr><td class="text-muted">关联条目</td><td><code>${escapeHtml(c.entity_id || '--')}</code></td></tr>
+                    <tr><td class="text-muted">描述</td><td>${escapeHtml(c.description)}</td></tr>
+                    <tr><td class="text-muted">状态</td><td>${c.status === 'resolved' ? '已处理' : '待处理'}</td></tr>
+                </table>`;
+            new bootstrap.Modal(document.getElementById('detailModal')).show();
+        }
+
+        async function resolve(id) {
+            try {
+                await SchedulerAPI.resolveConflict(id);
+                showToast('已标记为处理完成', 'success');
+                loadConflicts();
+            } catch (err) { showToast('操作失败：' + err.message, 'danger'); }
+        }
+    </script>
+</body>
+</html>

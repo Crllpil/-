@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统概览 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="page-header">
+            <h4><i class="bi bi-speedometer2 me-2"></i>系统概览</h4>
+            <p>查看系统用户、基础数据与当前启用排课方案的运行状态</p>
+        </div>
+
+        <div class="row g-3 mb-4" id="overviewStats"></div>
+
+        <div class="row g-3">
+            <div class="col-lg-8">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-calendar2-check me-2"></i>当前启用方案</div>
+                    <div id="planPanel">
+                        <div class="text-muted py-4 text-center">加载中...</div>
+                    </div>
+                    <div class="section-title mt-4"><i class="bi bi-journal-text me-2"></i>最近操作日志</div>
+                    <div class="table-responsive">
+                        <table class="table table-custom mb-0">
+                            <thead><tr><th>时间</th><th>操作人</th><th>操作</th><th>对象</th></tr></thead>
+                            <tbody id="recentLogs"><tr><td colspan="4" class="text-center text-muted py-4">加载中...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-pie-chart me-2"></i>用户角色分布</div>
+                    <div id="roleChart"></div>
+                </div>
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-lightning-charge me-2"></i>快捷入口</div>
+                    <div class="d-grid gap-2">
+                        <a href="users.html" class="btn btn-outline-primary"><i class="bi bi-people me-1"></i>管理用户与权限</a>
+                        <a href="logs.html" class="btn btn-outline-secondary"><i class="bi bi-journal-text me-1"></i>查看操作日志</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        renderLayout('admin', 'dashboard');
+
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+
+        async function loadDashboard() {
+            showLoading();
+            try {
+                const res = await AdminAPI.getDashboard();
+                const d = res.data || res;
+                renderStatCards('overviewStats', [
+                    { label: '系统用户', value: d.total_users || 0, icon: 'bi-people-fill', color: 'var(--sec)', sub: '含管理员、教务员、教师、学生' },
+                    { label: '教师总数', value: d.total_teachers || 0, icon: 'bi-person-workspace', color: 'var(--acc)', sub: '参与排课的教师' },
+                    { label: '课程总数', value: d.total_courses || 0, icon: 'bi-book-fill', color: 'var(--warn)', sub: `覆盖 ${d.total_classes || 0} 个班级` },
+                    { label: '当前方案冲突', value: `${d.conflicts.hard} / ${d.conflicts.soft}`, icon: 'bi-exclamation-triangle-fill', color: d.conflicts.hard ? 'var(--danger)' : '#27ae60', sub: '硬约束 / 软约束' },
+                ]);
+                renderPlan(d.active_plan, d.conflicts);
+                renderLogs(d.recent_logs || []);
+                const roleLabels = { admin: '系统管理员', scheduler: '教务员', teacher: '教师', student: '学生' };
+                const roleColors = { admin: '#E74C3C', scheduler: '#E67E22', teacher: '#27ae60', student: '#3495DB' };
+                renderBarList('roleChart', Object.keys(d.role_stats || {}).map(k => ({
+                    label: roleLabels[k] || k, value: d.role_stats[k], color: roleColors[k] || 'var(--sec)',
+                })));
+            } catch (err) {
+                showToast('加载数据失败：' + err.message, 'danger');
+            } finally { hideLoading(); }
+        }
+
+        function renderPlan(plan, conflicts) {
+            const el = document.getElementById('planPanel');
+            if (!plan) {
+                el.innerHTML = '<div class="empty-state"><i class="bi bi-calendar-x"></i><p class="mt-2 mb-0">当前没有启用的排课方案</p></div>';
+                return;
+            }
+            el.innerHTML = `
+                <div class="plan-banner">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                        <div>
+                            <div class="plan-meta">当前启用方案</div>
+                            <div class="plan-version">V${plan.version}</div>
+                            <div class="plan-meta">${escapeHtml(plan.task_name || '')} · ${escapeHtml(plan.gen_method || '')} · ${escapeHtml(plan.created_at || '')}</div>
+                        </div>
+                        <div class="d-flex gap-4">
+                            <div class="metric"><strong>${plan.item_count || 0}</strong><span class="plan-meta">课表条目</span></div>
+                            <div class="metric"><strong>${plan.fitness || '--'}</strong><span class="plan-meta">适应度</span></div>
+                            <div class="metric"><strong>${conflicts.hard}</strong><span class="plan-meta">硬冲突</span></div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function renderLogs(logs) {
+            const tbody = document.getElementById('recentLogs');
+            if (!logs.length) return renderEmptyRow(tbody, 4, '暂无操作日志');
+            tbody.innerHTML = logs.map(l => `
+                <tr>
+                    <td><small class="text-muted">${escapeHtml(l.op_time)}</small></td>
+                    <td><code>${escapeHtml(l.op_user)}</code></td>
+                    <td>${escapeHtml(l.action)}</td>
+                    <td><small>${escapeHtml(l.target || '--')}</small></td>
+                </tr>`).join('');
+        }
+    </script>
+</body>
+</html>

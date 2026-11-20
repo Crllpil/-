@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的概览 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-speedometer2 me-2"></i>学生工作台</h4>
+                <p>查看班级信息、今日课程与本周课表</p>
+            </div>
+            <div class="page-actions">
+                <a href="timetable.html" class="btn btn-primary-custom"><i class="bi bi-calendar2-week me-1"></i>查看班级课表</a>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4" id="stats"></div>
+
+        <div class="row g-3">
+            <div class="col-lg-5">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-people-fill me-2"></i>班级信息</div>
+                    <div id="classInfo"><p class="text-muted mb-0">加载中...</p></div>
+                </div>
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-info-circle me-2"></i>当前排课方案</div>
+                    <div id="planPanel"><p class="text-muted mb-0">加载中...</p></div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-calendar-day me-2"></i>今日课程</div>
+                    <div id="todayList"><p class="text-muted text-center py-4 mb-0">加载中...</p></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title"><i class="bi bi-book me-2"></i>本学期课程</div>
+            <div class="table-responsive">
+                <table class="table table-custom mb-0">
+                    <thead><tr><th>课程编号</th><th>课程名称</th><th>类型</th><th>学分</th><th>周学时</th><th>授课教师</th></tr></thead>
+                    <tbody id="courseBody"><tr><td colspan="6" class="text-center text-muted py-4">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        const user = renderLayout('student', 'dashboard');
+        let dashboard = null;
+
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+
+        async function loadDashboard() {
+            showLoading();
+            try {
+                const res = await StudentAPI.getDashboard(user.class_id);
+                dashboard = res.data || res;
+                renderStats();
+                renderClass();
+                renderPlan();
+                renderToday();
+                renderCourses();
+            } catch (err) { showToast('加载失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        function renderStats() {
+            const s = dashboard.stats || {};
+            renderStatCards('stats', [
+                { label: '本学期课程', value: s.course_count || 0, icon: 'bi-book-fill', color: 'var(--sec)' },
+                { label: '周课时', value: s.weekly_hours || 0, icon: 'bi-clock-history', color: 'var(--acc)', sub: '节/周' },
+                { label: '任课教师', value: s.teacher_count || 0, icon: 'bi-person-workspace', color: 'var(--warn)' },
+                { label: '当前方案', value: dashboard.plan ? 'V' + dashboard.plan.version : '--', icon: 'bi-calendar2-check-fill', color: dashboard.plan ? '#27ae60' : 'var(--lit)' },
+            ]);
+        }
+
+        function renderClass() {
+            const c = dashboard.class_info || {};
+            document.getElementById('classInfo').innerHTML = `
+                <div class="d-flex align-items-center gap-3">
+                    <div class="stat-icon" style="background:var(--sec);"><i class="bi bi-people"></i></div>
+                    <div>
+                        <div class="fw-bold" style="font-size:1.15rem;">${escapeHtml(c.name || user.class_id || '--')}</div>
+                        <div class="text-muted" style="font-size:.82rem;">${escapeHtml(c.major || '')} · ${escapeHtml(c.grade || '')}级 · ${c.student_count || '--'} 人</div>
+                    </div>
+                </div>`;
+        }
+
+        function renderPlan() {
+            const p = dashboard.plan;
+            const el = document.getElementById('planPanel');
+            if (!p) { el.innerHTML = '<p class="text-muted mb-0">当前学期暂无启用方案</p>'; return; }
+            el.innerHTML = `
+                <div class="d-flex justify-content-between">
+                    <div><div class="fw-bold" style="font-size:1.35rem;color:var(--pri);">V${p.version}</div>
+                    <div class="text-muted" style="font-size:.8rem;">${escapeHtml(p.task_name || '')}</div></div>
+                    <div class="text-end"><span class="badge bg-success">已发布</span>
+                    <div class="text-muted mt-1" style="font-size:.78rem;">${escapeHtml(p.created_at || '')}</div></div>
+                </div>`;
+        }
+
+        function todayDay() {
+            const d = new Date().getDay();
+            return d === 0 ? 1 : Math.min(d, 5);
+        }
+
+        function renderToday() {
+            const day = todayDay();
+            const items = (dashboard.items || []).filter(it => Number(it.day) === day).sort((a, b) => a.period - b.period);
+            const el = document.getElementById('todayList');
+            if (!items.length) {
+                el.innerHTML = '<div class="empty-state"><i class="bi bi-cup-hot"></i><p class="mt-2 mb-0">今天没有课程安排</p></div>';
+                return;
+            }
+            el.innerHTML = `<div class="table-responsive"><table class="table table-custom mb-0">
+                <thead><tr><th>节次</th><th>课程</th><th>教师</th><th>教室</th></tr></thead>
+                <tbody>${items.map(it => `
+                    <tr>
+                        <td><strong>${escapeHtml(it.period_label || periodLabel(it.period))}</strong></td>
+                        <td>${escapeHtml(it.course_name)}</td>
+                        <td>${escapeHtml(it.teacher_name || it.teacher_id)}</td>
+                        <td>${escapeHtml(it.room_name || it.room_id)}</td>
+                    </tr>`).join('')}</tbody></table></div>`;
+        }
+
+        function renderCourses() {
+            const tbody = document.getElementById('courseBody');
+            const courses = dashboard.courses || [];
+            if (!courses.length) return renderEmptyRow(tbody, 6, '暂无课程');
+            tbody.innerHTML = courses.map(c => `
+                <tr>
+                    <td><code>${escapeHtml(c.course_no)}</code></td>
+                    <td><strong>${escapeHtml(c.course_name)}</strong></td>
+                    <td><span class="badge bg-light text-dark">${escapeHtml(c.course_type)}</span></td>
+                    <td>${c.credit}</td>
+                    <td>${c.weekly_hours}</td>
+                    <td>${escapeHtml(c.teacher_name || c.teacher_id)}</td>
+                </tr>`).join('');
+        }
+    </script>
+</body>
+</html>

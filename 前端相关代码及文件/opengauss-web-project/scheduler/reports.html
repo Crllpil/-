@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统计报表 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-bar-chart-fill me-2"></i>统计报表</h4>
+                <p>教室利用率、教师周课时、班级课程分布与冲突统计</p>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-outline-secondary" onclick="printPage()"><i class="bi bi-printer me-1"></i>打印</button>
+                <button class="btn btn-outline-secondary" onclick="exportReport()"><i class="bi bi-download me-1"></i>导出报表</button>
+            </div>
+        </div>
+
+        <div class="filter-bar">
+            <select class="form-select" id="planSelect" onchange="loadReport()" style="max-width:360px;"></select>
+            <span class="ms-auto text-muted" style="font-size:.85rem;" id="summaryText">--</span>
+        </div>
+
+        <div class="row g-3 mb-3" id="stats"></div>
+
+        <div class="row g-3">
+            <div class="col-lg-6">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-door-open me-2"></i>教室利用率</div>
+                    <div id="roomChart"><p class="text-center text-muted py-4">加载中...</p></div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-person-workspace me-2"></i>教师周课时</div>
+                    <div id="teacherChart"><p class="text-center text-muted py-4">加载中...</p></div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-people me-2"></i>班级课程分布</div>
+                    <div id="classChart"><p class="text-center text-muted py-4">加载中...</p></div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-exclamation-triangle me-2"></i>冲突类型统计</div>
+                    <div id="conflictChart"><p class="text-center text-muted py-4">加载中...</p></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        renderLayout('scheduler', 'reports');
+        let plans = [], report = null;
+
+        document.addEventListener('DOMContentLoaded', init);
+
+        async function init() {
+            showLoading();
+            try {
+                const res = await SchedulerAPI.getPlans();
+                plans = res.data || res || [];
+                if (!plans.length) {
+                    document.getElementById('stats').innerHTML = '<div class="col-12"><div class="section-card empty-state"><i class="bi bi-bar-chart"></i><p class="mt-2">暂无排课方案，无法生成报表</p><a href="tasks.html" class="btn btn-primary-custom btn-sm">去排课</a></div></div>';
+                    return;
+                }
+                const active = plans.find(p => p.is_active === 1) || plans[0];
+                renderPlanSelect('planSelect', plans, active.plan_id);
+                await loadReport();
+            } catch (err) { showToast('加载失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        async function loadReport() {
+            const planId = document.getElementById('planSelect').value;
+            if (!planId) return;
+            showLoading();
+            try {
+                const res = await SchedulerAPI.getReport(planId);
+                report = res.data || res;
+                if (!report) return showToast('暂无报表数据', 'warning');
+                renderStats();
+                renderCharts();
+                document.getElementById('summaryText').textContent =
+                    `方案 V${report.plan.version} · ${report.plan.task_name || ''} · 统计课次 ${report.items}`;
+            } catch (err) { showToast('加载报表失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        function renderStats() {
+            const coverage = report.total_courses ? Math.round(report.courses / report.total_courses * 100) : 0;
+            renderStatCards('stats', [
+                { label: '教室利用率', value: report.utilization + '%', icon: 'bi-door-open-fill', color: 'var(--sec)', sub: `${report.items} 个课次 / ${report.room_total} 个可用时段` },
+                { label: '课程覆盖', value: coverage + '%', icon: 'bi-book-fill', color: 'var(--acc)', sub: `${report.courses} / ${report.total_courses} 门课程已排` },
+                { label: '硬约束冲突', value: report.hard_conflicts, icon: 'bi-shield-exclamation', color: report.hard_conflicts ? 'var(--danger)' : '#27ae60', sub: report.hard_conflicts ? '需处理后启用' : '全部满足' },
+                { label: '软约束未满足', value: report.soft_conflicts, icon: 'bi-sliders', color: report.soft_conflicts ? 'var(--warn)' : '#27ae60', sub: '偏好、分布、空档等' },
+            ]);
+        }
+
+        function renderCharts() {
+            renderBarList('roomChart', report.rooms.map(r => ({
+                label: `${r.name}（${r.capacity}人）`, value: r.rate, display: r.rate + '%',
+                color: r.rate >= 80 ? '#E67E22' : r.rate >= 40 ? 'var(--sec)' : '#95a5a6',
+            })), { showValue: true });
+
+            renderBarList('teacherChart', report.teacher_hours.map(t => ({
+                label: t.name, value: t.hours, display: t.hours + ' 节',
+                color: t.max && t.hours > t.max ? 'var(--danger)' : 'var(--acc)',
+            })), { showValue: true });
+
+            renderBarList('classChart', report.class_hours.map(c => ({
+                label: c.name, value: c.hours, display: c.hours + ' 节', color: 'var(--warn)',
+            })), { showValue: true });
+
+            const conflictData = report.conflict_by_type.length ? report.conflict_by_type.map(c => ({
+                label: c.type, value: c.count, display: c.count + ' 条',
+                color: c.type.includes('偏好') ? 'var(--warn)' : 'var(--danger)',
+            })) : [{ label: '无冲突', value: 0, display: '0 条', color: '#27ae60' }];
+            renderBarList('conflictChart', conflictData, { showValue: true });
+        }
+
+        function exportReport() {
+            if (!report) return showToast('暂无报表数据', 'warning');
+            downloadCSV('排课统计报表.csv', [
+                ['指标', '数值'],
+                ['方案版本', 'V' + report.plan.version],
+                ['任务名称', report.plan.task_name || ''],
+                ['课表条目', report.items],
+                ['教室利用率', report.utilization + '%'],
+                ['硬约束冲突', report.hard_conflicts],
+                ['软约束未满足', report.soft_conflicts],
+                [],
+                ['教室', '使用课次', '总时段', '利用率'],
+                ...report.rooms.map(r => [r.name, r.used, r.total, r.rate + '%']),
+                [],
+                ['教师', '周课时'],
+                ...report.teacher_hours.map(t => [t.name, t.hours]),
+                [],
+                ['班级', '周课时'],
+                ...report.class_hours.map(c => [c.name, c.hours]),
+            ]);
+        }
+    </script>
+</body>
+</html>

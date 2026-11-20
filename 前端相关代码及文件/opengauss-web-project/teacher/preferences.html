@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>时间偏好 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-sliders me-2"></i>时间偏好设置</h4>
+                <p>点击时间段切换偏好状态；禁止时段为硬约束，回避时段为软约束</p>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-outline-secondary" onclick="resetGrid()"><i class="bi bi-arrow-counterclockwise me-1"></i>清空</button>
+                <button class="btn btn-primary-custom" id="saveBtn" onclick="savePrefs()"><i class="bi bi-check-lg me-1"></i>保存偏好</button>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3" id="stats"></div>
+
+        <div class="row g-3">
+            <div class="col-xl-9">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-calendar3 me-2"></i>每周时间段偏好</div>
+                    <div class="tt-legend mb-3">
+                        <span><i class="legend-dot" style="background:#e8f8f0;border-left:3px solid #2ecc71;"></i>偏好（软约束奖励）</span>
+                        <span><i class="legend-dot" style="background:#fff6e5;border-left:3px solid #E67E22;"></i>回避（软约束惩罚）</span>
+                        <span><i class="legend-dot" style="background:#fdecea;border-left:3px solid #E74C3C;"></i>禁止（硬约束）</span>
+                    </div>
+                    <div id="prefGrid"><p class="text-muted text-center py-4">加载中...</p></div>
+                </div>
+            </div>
+            <div class="col-xl-3">
+                <div class="section-card">
+                    <div class="section-title"><i class="bi bi-info-circle me-2"></i>设置说明</div>
+                    <ul class="small text-muted ps-3 mb-3">
+                        <li class="mb-2">单击单元格一次：设为<b>偏好</b>；再次单击：设为<b>回避</b>；再次单击：设为<b>禁止</b>；第四次单击：取消设置。</li>
+                        <li class="mb-2"><b>禁止</b>时段不会安排任何课程。</li>
+                        <li class="mb-2"><b>回避</b>时段在排课时会被尽量避开，但资源紧张时仍可能安排。</li>
+                        <li><b>偏好</b>时段在适应度中给予奖励。</li>
+                    </ul>
+                    <div class="soft-note">时间偏好将作为软约束参与下一次自动排课；已生成方案不会被自动修改。</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        const user = renderLayout('teacher', 'preferences');
+        const states = ['', 'prefer', 'avoid', 'forbid'];
+        const stateText = { '': '未设置', prefer: '偏好', avoid: '回避', forbid: '禁止' };
+        let prefs = {};
+
+        document.addEventListener('DOMContentLoaded', loadPrefs);
+
+        async function loadPrefs() {
+            showLoading();
+            try {
+                const res = await TeacherAPI.getPreferences(user.teacher_id);
+                const list = res.data || res || [];
+                prefs = {};
+                list.forEach(p => { prefs[p.slot_id] = p.level; });
+                renderGrid();
+            } catch (err) { showToast('加载偏好失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        function renderGrid() {
+            const el = document.getElementById('prefGrid');
+            let html = '<div class="pref-grid"><div class="pref-head">节次 / 星期</div>';
+            DAY_NAMES.forEach(d => { html += `<div class="pref-head">${d}</div>`; });
+            PERIODS.forEach(p => {
+                html += `<div class="pref-head" style="text-align:right;">${p.label}<div class="text-muted" style="font-weight:400;font-size:.7rem;">${p.start}-${p.end}</div></div>`;
+                for (let day = 1; day <= 5; day++) {
+                    const slotId = 'S' + day + p.period;
+                    const lv = prefs[slotId] || '';
+                    html += `<div class="pref-slot ${lv}" data-slot="${slotId}" onclick="cycle('${slotId}', this)">
+                        ${p.label}<span class="pref-state">${stateText[lv]}</span></div>`;
+                }
+            });
+            html += '</div>';
+            el.innerHTML = html;
+            renderStats();
+        }
+
+        function cycle(slotId, el) {
+            const idx = states.indexOf(prefs[slotId] || '');
+            const next = states[(idx + 1) % states.length];
+            if (next) prefs[slotId] = next;
+            else delete prefs[slotId];
+            if (el) {
+                el.className = 'pref-slot ' + next;
+                const slot = slotsFor(slotId);
+                el.innerHTML = `${slot ? slot.label : ''}<span class="pref-state">${stateText[next]}</span>`;
+            } else {
+                renderGrid();
+            }
+            renderStats();
+        }
+
+        function slotsFor(slotId) {
+            const day = Number(slotId.charAt(1));
+            const period = Number(slotId.charAt(2));
+            const p = PERIODS.find(x => x.period === period);
+            return p ? { label: p.label } : null;
+        }
+
+        function resetGrid() {
+            prefs = {};
+            renderGrid();
+            showToast('已清空当前设置，点击保存后生效', 'info');
+        }
+
+        function renderStats() {
+            const values = Object.values(prefs);
+            renderStatCards('stats', [
+                { label: '偏好时段', value: values.filter(v => v === 'prefer').length, icon: 'bi-hand-thumbs-up', color: '#27ae60' },
+                { label: '回避时段', value: values.filter(v => v === 'avoid').length, icon: 'bi-hand-thumbs-down', color: 'var(--warn)' },
+                { label: '禁止时段', value: values.filter(v => v === 'forbid').length, icon: 'bi-slash-circle', color: 'var(--danger)' },
+                { label: '已设置', value: values.length, icon: 'bi-sliders', color: 'var(--sec)', sub: '共 25 个可选时段' },
+            ]);
+        }
+
+        async function savePrefs() {
+            const btn = document.getElementById('saveBtn');
+            btn.disabled = true;
+            try {
+                const list = Object.keys(prefs).map(slotId => ({ slot_id: slotId, level: prefs[slotId] }));
+                await TeacherAPI.savePreferences(user.teacher_id, list);
+                showToast('时间偏好保存成功', 'success');
+            } catch (err) { showToast('保存失败：' + err.message, 'danger'); }
+            finally { btn.disabled = false; }
+        }
+    </script>
+</body>
+</html>

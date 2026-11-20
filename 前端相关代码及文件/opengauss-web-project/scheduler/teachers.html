@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教师管理 - 智能校园排课系统</title>
+    <link rel="icon" href="../favicon.ico">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div id="appNav"></div>
+
+    <div class="container-fluid py-4 px-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div class="page-header mb-0">
+                <h4><i class="bi bi-person-workspace me-2"></i>教师管理</h4>
+                <p>维护教师基本信息、周课时上限，并查看教师时间偏好</p>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary-custom" onclick="showAdd()"><i class="bi bi-person-plus me-1"></i>新增教师</button>
+            </div>
+        </div>
+
+        <div class="filter-bar">
+            <input type="text" class="form-control" id="keyword" placeholder="🔍 搜索工号/姓名/院系..." oninput="renderTable()">
+            <span class="ms-auto text-muted" style="font-size:.85rem;">共 <strong id="totalCount">0</strong> 名教师</span>
+        </div>
+
+        <div class="section-card p-0">
+            <div class="table-responsive">
+                <table class="table table-custom mb-0">
+                    <thead><tr><th>工号</th><th>姓名</th><th>职称</th><th>院系</th><th>联系电话</th><th>周课时上限</th><th>时间偏好</th><th>操作</th></tr></thead>
+                    <tbody id="tbody"><tr><td colspan="8" class="text-center text-muted py-4">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title" id="modalTitle">新增教师</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="editId">
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label">工号 <span class="text-danger">*</span></label>
+                            <input class="form-control" id="teacherNo" placeholder="如 T010"></div>
+                        <div class="col-md-6"><label class="form-label">姓名 <span class="text-danger">*</span></label>
+                            <input class="form-control" id="name"></div>
+                        <div class="col-md-6"><label class="form-label">职称</label>
+                            <select class="form-select" id="title"><option>教授</option><option>副教授</option><option>讲师</option><option>助教</option></select></div>
+                        <div class="col-md-6"><label class="form-label">院系</label>
+                            <input class="form-control" id="department" placeholder="如 计算机学院"></div>
+                        <div class="col-md-6"><label class="form-label">联系电话</label><input class="form-control" id="phone"></div>
+                        <div class="col-md-6"><label class="form-label">周课时上限</label><input type="number" class="form-control" id="maxHours" min="1" max="30" value="12"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button class="btn btn-primary-custom" id="saveBtn" onclick="saveTeacher()"><i class="bi bi-check-lg me-1"></i>保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="prefModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title" id="prefTitle">教师时间偏好</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="tt-legend mb-3">
+                        <span><i class="legend-dot" style="background:#e8f8f0;border-left:3px solid #2ecc71;"></i>偏好</span>
+                        <span><i class="legend-dot" style="background:#fff6e5;border-left:3px solid #E67E22;"></i>回避</span>
+                        <span><i class="legend-dot" style="background:#fdecea;border-left:3px solid #E74C3C;"></i>禁止（硬约束）</span>
+                    </div>
+                    <div id="prefGrid"></div>
+                    <div class="soft-note mt-3">教师可在“时间偏好”页面自行维护，教务员在此查看；禁止时段作为硬约束，回避时段作为软约束参与排课。</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/algorithm.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/mock.js"></script>
+    <script src="../js/page-common.js"></script>
+    <script src="../js/layout.js"></script>
+    <script>
+        renderLayout('scheduler', 'teachers');
+        let teachers = [];
+
+        document.addEventListener('DOMContentLoaded', loadTeachers);
+
+        async function loadTeachers() {
+            showLoading();
+            try {
+                const res = await SchedulerAPI.getTeachers();
+                teachers = res.data || res || [];
+                renderTable();
+            } catch (err) { showToast('加载失败：' + err.message, 'danger'); }
+            finally { hideLoading(); }
+        }
+
+        function renderTable() {
+            const kw = document.getElementById('keyword').value.trim().toLowerCase();
+            const list = teachers.filter(t => !kw || (t.teacher_no + t.name + t.department).toLowerCase().includes(kw));
+            document.getElementById('totalCount').textContent = list.length;
+            const tbody = document.getElementById('tbody');
+            if (!list.length) return renderEmptyRow(tbody, 8, '暂无教师数据');
+            tbody.innerHTML = list.map(t => `
+                <tr>
+                    <td><code>${escapeHtml(t.teacher_no)}</code></td>
+                    <td><strong>${escapeHtml(t.name)}</strong></td>
+                    <td>${escapeHtml(t.title || '--')}</td>
+                    <td>${escapeHtml(t.department || '--')}</td>
+                    <td>${escapeHtml(t.phone || '--')}</td>
+                    <td>${t.max_weekly_hours || '--'} 节/周</td>
+                    <td><span class="badge bg-light text-dark">${t.pref_count || 0} 条</span></td>
+                    <td class="table-actions">
+                        <button class="btn btn-sm btn-outline-success" onclick="showPrefs('${t.teacher_id}','${escapeHtml(t.name)}')"><i class="bi bi-sliders"></i> 偏好</button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="showEdit('${t.teacher_id}')"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="delTeacher('${t.teacher_id}','${escapeHtml(t.name)}')"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`).join('');
+        }
+
+        function showAdd() {
+            document.getElementById('modalTitle').textContent = '新增教师';
+            document.getElementById('editId').value = '';
+            document.getElementById('teacherNo').value = '';
+            document.getElementById('teacherNo').disabled = false;
+            document.getElementById('name').value = '';
+            document.getElementById('title').value = '讲师';
+            document.getElementById('department').value = '';
+            document.getElementById('phone').value = '';
+            document.getElementById('maxHours').value = '12';
+            new bootstrap.Modal(document.getElementById('editModal')).show();
+        }
+
+        function showEdit(id) {
+            const t = teachers.find(x => String(x.teacher_id) === String(id));
+            if (!t) return;
+            document.getElementById('modalTitle').textContent = '编辑教师';
+            document.getElementById('editId').value = t.teacher_id;
+            document.getElementById('teacherNo').value = t.teacher_no;
+            document.getElementById('teacherNo').disabled = true;
+            document.getElementById('name').value = t.name;
+            document.getElementById('title').value = t.title || '讲师';
+            document.getElementById('department').value = t.department || '';
+            document.getElementById('phone').value = t.phone || '';
+            document.getElementById('maxHours').value = t.max_weekly_hours || 12;
+            new bootstrap.Modal(document.getElementById('editModal')).show();
+        }
+
+        async function saveTeacher() {
+            const id = document.getElementById('editId').value;
+            const data = {
+                teacher_id: id || 'T' + Date.now().toString(36).toUpperCase(),
+                teacher_no: document.getElementById('teacherNo').value.trim(),
+                name: document.getElementById('name').value.trim(),
+                title: document.getElementById('title').value,
+                department: document.getElementById('department').value.trim(),
+                phone: document.getElementById('phone').value.trim(),
+                max_weekly_hours: Number(document.getElementById('maxHours').value),
+            };
+            if (!data.teacher_no || !data.name) return showToast('请填写工号和姓名', 'warning');
+            try {
+                if (id) await SchedulerAPI.updateTeacher(id, data);
+                else await SchedulerAPI.addTeacher(data);
+                showToast('保存成功', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+                loadTeachers();
+            } catch (err) { showToast('保存失败：' + err.message, 'danger'); }
+        }
+
+        async function delTeacher(id, name) {
+            if (!await confirmAction('删除教师', `确定删除教师「${name}」吗？已承担课程的教师受约束保护。`)) return;
+            try {
+                await SchedulerAPI.deleteTeacher(id);
+                showToast('删除成功', 'success');
+                loadTeachers();
+            } catch (err) { showToast('删除失败：' + err.message, 'danger'); }
+        }
+
+        async function showPrefs(teacherId, name) {
+            document.getElementById('prefTitle').textContent = `${name} 的时间偏好`;
+            new bootstrap.Modal(document.getElementById('prefModal')).show();
+            const el = document.getElementById('prefGrid');
+            el.innerHTML = '<p class="text-muted text-center py-3">加载中...</p>';
+            try {
+                const res = await SchedulerAPI.getPreferences(teacherId);
+                const prefs = res.data || res || [];
+                const map = {};
+                prefs.forEach(p => { map[p.slot_id] = p.level; });
+                const levels = { prefer: '偏好', avoid: '回避', forbid: '禁止' };
+                let html = '<div class="pref-grid"><div class="pref-head">节次 / 星期</div>';
+                DAY_NAMES.forEach(d => { html += `<div class="pref-head">${d}</div>`; });
+                PERIODS.forEach(p => {
+                    html += `<div class="pref-head" style="text-align:right;">${p.label}</div>`;
+                    for (let day = 1; day <= 5; day++) {
+                        const slotId = 'S' + day + p.period;
+                        const lv = map[slotId] || '';
+                        html += `<div class="pref-slot ${lv}" style="cursor:default;">${lv ? levels[lv] : '—'}<span class="pref-state">${p.start}</span></div>`;
+                    }
+                });
+                html += '</div>';
+                el.innerHTML = html;
+            } catch (err) { el.innerHTML = `<p class="text-danger text-center py-3">${escapeHtml(err.message)}</p>`; }
+        }
+    </script>
+</body>
+</html>
