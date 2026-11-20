@@ -7,17 +7,17 @@ Schema：`campus_schedule`
 ## 执行顺序
 
 ```bash
-# 1. 使用 omm 超级用户创建数据库
-gsql -d postgres -U omm -W -c "CREATE DATABASE campus_schedule;"
+# 1. 使用 opengauss 超级用户创建数据库
+gsql -d postgres -U opengauss -W -c "CREATE DATABASE campus_schedule;"
 
 # 2. 按顺序执行
-gsql -d campus_schedule -U omm -W -f 01_ddl_tables.sql
-gsql -d campus_schedule -U omm -W -f 02_views.sql
-gsql -d campus_schedule -U omm -W -f 03_indexes.sql
-gsql -d campus_schedule -U omm -W -f 04_security.sql
-gsql -d campus_schedule -U omm -W -f 05_triggers.sql
-gsql -d campus_schedule -U omm -W -f 06_procedures.sql
-gsql -d campus_schedule -U omm -W -f 07_seed_data.sql
+gsql -d campus_schedule -U opengauss -W -f 01_ddl_tables.sql
+gsql -d campus_schedule -U opengauss -W -f 02_views.sql
+gsql -d campus_schedule -U opengauss -W -f 03_indexes.sql
+gsql -d campus_schedule -U opengauss -W -f 04_security.sql
+gsql -d campus_schedule -U opengauss -W -f 05_triggers.sql
+gsql -d campus_schedule -U opengauss -W -f 06_procedures.sql
+gsql -d campus_schedule -U opengauss -W -f 07_seed_data.sql
 ```
 
 ## 脚本说明
